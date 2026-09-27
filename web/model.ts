@@ -1,0 +1,2 @@
+export type Row={t:number;cpu:number|null;memory:number|null;gpu:number|null;cpuTemp:number|null;gpuTemp:number|null;netUp:number|null;netDown:number|null};
+export type Sample=Row&{memoryUsedGb?:number|null;memoryTotalGb?:number|null;gpuName?:string|null;gpuMemoryUsedGb?:number|null;gpuMemoryTotalGb?:number|null;gpuPowerW?:number|null;cpuMhz?:number|null;uptimeSeconds?:number|null;diskRead?:number|null;diskWrite?:number|null;disks?:{name:string;usedGb:number;totalGb:number}[]};

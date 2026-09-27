@@ -1,0 +1,41 @@
+limit_req_zone $binary_remote_addr zone=monitor_login_v2:1m rate=5r/m;
+limit_req_zone $binary_remote_addr zone=monitor_requests_v2:1m rate=10r/s;
+limit_conn_zone $binary_remote_addr zone=monitor_connections_v2:1m;
+server {
+    server_tokens off;
+    limit_req_status 429;
+    limit_conn_status 429;
+    limit_conn monitor_connections_v2 20;
+    listen 443 ssl;
+    server_name @HOST@;
+    ssl_certificate @CERTIFICATE@;
+    ssl_certificate_key @PRIVATE_KEY@;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 16k;
+    client_body_timeout 15s;
+    add_header Strict-Transport-Security "max-age=86400" always;
+
+    location = /api/login {
+        limit_req zone=monitor_login_v2 burst=5 nodelay;
+        proxy_pass http://127.0.0.1:18081;
+        proxy_set_header Host @HOST@;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 35s;
+        proxy_redirect off;
+    }
+
+    location / {
+        limit_req zone=monitor_requests_v2 burst=30 nodelay;
+        proxy_pass http://127.0.0.1:18081;
+        proxy_set_header Host @HOST@;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 35s;
+        proxy_redirect off;
+    }
+}
