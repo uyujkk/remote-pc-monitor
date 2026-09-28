@@ -1,6 +1,6 @@
 Remote PC Monitor - Windows tray collector
 
-The current application UI is Chinese. Documentation is in English.
+The application UI supports Chinese and English. Select the language in the upper-right corner; the choice is saved locally.
 
 1. Extract the ZIP into a permanent folder, e.g. D:\RemotePcMonitor.
 2. Sign into YOUR self-hosted dashboard. Click 接入电脑 (Connect PC), then download config.json.
@@ -22,9 +22,9 @@ If VBScript is disabled, create a shortcut to powershell.exe with these argument
 The scripts are not code-signed. Review the source before running.
 Use 查看日志 to read collector.log. 诊断连接.cmd performs a connection diagnosis and opens a console; it does not upload hardware samples.
 
-Metrics: CPU load/frequency, memory, disk capacity/IO, aggregate network rates, uptime and the first GPU.
+Metrics: CPU load/frequency/model, motherboard model, RAM module models, physical disk models, memory, disk capacity/IO, aggregate network rates, uptime and the first GPU, including its power reading when available. Serial numbers are not collected.
 NVIDIA metrics use the driver's nvidia-smi when available. Optional CPU temperature and other GPU sensors use LibreHardwareMonitor WMI if already installed.
-No drivers or sensor tools are installed automatically. Missing readings remain null (shown as a dash).
+No drivers or sensor tools are installed automatically. Windows standard WMI classes do not provide a reliable direct CPU package/core temperature; LibreHardwareMonitor WMI is optional. Missing readings remain null (shown as a dash).
 Capacity is GiB although the UI abbreviates it as GB; throughput MB/s is decimal. Virtual network adapters may be counted twice.
 The collector does not capture the screen, send game input, run remote commands or inspect automation task logs.
 Online means a sample arrived recently; it does not prove an automation task is healthy.

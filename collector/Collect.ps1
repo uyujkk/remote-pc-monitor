@@ -11,10 +11,19 @@ function Log([string]$Message){
 function Num($value,[double]$Scale=1){if($null -eq $value -or "$value" -eq ''){return $null};$n=0.0;if([double]::TryParse("$value",[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$n) -and -not [double]::IsNaN($n) -and -not [double]::IsInfinity($n)){return [Math]::Round($n/$Scale,3)};return $null}
 function Cim([string]$Class,[string]$Filter=''){try{if($Filter){return Get-CimInstance -ClassName $Class -Filter $Filter -OperationTimeoutSec 8 -ErrorAction Stop}else{return Get-CimInstance -ClassName $Class -OperationTimeoutSec 8 -ErrorAction Stop}}catch{return $null}}
 function Read-Sample {
- $s=[ordered]@{sampleId=[guid]::NewGuid().ToString();cpu=$null;memory=$null;gpu=$null;cpuTemp=$null;gpuTemp=$null;netUp=$null;netDown=$null;memoryUsedGb=$null;memoryTotalGb=$null;gpuName=$null;gpuMemoryUsedGb=$null;gpuMemoryTotalGb=$null;gpuPowerW=$null;cpuMhz=$null;uptimeSeconds=$null;diskRead=$null;diskWrite=$null;disks=@()}
+ $s=[ordered]@{sampleId=[guid]::NewGuid().ToString();cpu=$null;memory=$null;gpu=$null;cpuTemp=$null;gpuTemp=$null;netUp=$null;netDown=$null;memoryUsedGb=$null;memoryTotalGb=$null;gpuName=$null;gpuMemoryUsedGb=$null;gpuMemoryTotalGb=$null;gpuPowerW=$null;cpuMhz=$null;uptimeSeconds=$null;diskRead=$null;diskWrite=$null;disks=@();cpuName=$null;motherboardName=$null;memoryModules=@();storageModels=@();cpuTempSource=$null}
  $os=Cim 'Win32_OperatingSystem';if($os){$s.memoryTotalGb=Num $os.TotalVisibleMemorySize 1048576;$s.memoryUsedGb=Num ($os.TotalVisibleMemorySize-$os.FreePhysicalMemory) 1048576;if($os.TotalVisibleMemorySize -gt 0){$s.memory=Num (100*(1-$os.FreePhysicalMemory/$os.TotalVisibleMemorySize))};$s.uptimeSeconds=[Math]::Max(0,[Math]::Floor(((Get-Date)-$os.LastBootUpTime).TotalSeconds))}
  $cpu=Cim 'Win32_PerfFormattedData_PerfOS_Processor' "Name='_Total'";if($cpu){$s.cpu=Num $cpu.PercentProcessorTime}
- $processor=@(Cim 'Win32_Processor'|Where-Object{$null -ne $_})|Select-Object -First 1;if($processor){$s.cpuMhz=Num $processor.CurrentClockSpeed}
+ $processor=@(Cim 'Win32_Processor'|Where-Object{$null -ne $_})|Select-Object -First 1;if($processor){$s.cpuMhz=Num $processor.CurrentClockSpeed;$s.cpuName=([string]$processor.Name).Trim()}
+ $board=@(Cim 'Win32_BaseBoard'|Where-Object{$null -ne $_})|Select-Object -First 1;if($board){$s.motherboardName=(([string]$board.Manufacturer+' '+[string]$board.Product).Trim())}
+ $s.memoryModules=@(Cim 'Win32_PhysicalMemory'|Where-Object{$_.Capacity -gt 0}|Select-Object -First 16|ForEach-Object{
+  $label=(([string]$_.Manufacturer+' '+[string]$_.PartNumber).Trim());if(-not $label){$label='内存模组'}
+  [ordered]@{name=$label;capacityGb=Num $_.Capacity 1073741824;speedMhz=Num $_.ConfiguredClockSpeed}
+ })
+ $s.storageModels=@(Cim 'Win32_DiskDrive'|Where-Object{$_.Size -gt 0}|Select-Object -First 16|ForEach-Object{
+  $label=([string]$_.Model).Trim();if(-not $label){$label='物理磁盘'}
+  [ordered]@{name=$label;sizeGb=Num $_.Size 1073741824}
+ })
  $disk=Cim 'Win32_PerfFormattedData_PerfDisk_PhysicalDisk' "Name='_Total'";if($disk){$s.diskRead=Num $disk.DiskReadBytesPersec 1000000;$s.diskWrite=Num $disk.DiskWriteBytesPersec 1000000}
  $net=@(Cim 'Win32_PerfFormattedData_Tcpip_NetworkInterface'|Where-Object{$null -ne $_});if($net.Count -gt 0){$s.netUp=Num (($net|Measure-Object BytesSentPersec -Sum).Sum) 1000000;$s.netDown=Num (($net|Measure-Object BytesReceivedPersec -Sum).Sum) 1000000}
  $s.disks=@(Cim 'Win32_LogicalDisk' 'DriveType=3'|Where-Object{$_.Size -gt 0}|ForEach-Object{[ordered]@{name=$_.DeviceID;usedGb=Num ($_.Size-$_.FreeSpace) 1073741824;totalGb=Num $_.Size 1073741824}})
@@ -32,7 +41,10 @@ function Read-Sample {
  # Optional LibreHardwareMonitor WMI. No driver or monitoring utility is installed automatically.
  try{
   $sensors=@(Get-CimInstance -Namespace 'root\LibreHardwareMonitor' -ClassName Sensor -OperationTimeoutSec 5 -ErrorAction Stop)
-  $cpuTemps=@($sensors|Where-Object{$_.SensorType -eq 'Temperature' -and $_.Identifier -match '/(intelcpu|amdcpu)/' -and $_.Value -gt 0});if($cpuTemps.Count -gt 0){$s.cpuTemp=Num (($cpuTemps|Measure-Object Value -Maximum).Maximum)}
+  $cpuTemps=@($sensors|Where-Object{$_.SensorType -eq 'Temperature' -and $_.Identifier -match '/(intelcpu|amdcpu)/' -and $_.Value -gt 0 -and $_.Value -lt 200})
+  $package=$cpuTemps|Where-Object{$_.Name -match 'CPU Package|Tctl/Tdie|CPU Core|Core Max'}|Select-Object -First 1
+  if(-not $package){$package=$cpuTemps|Select-Object -First 1}
+  if($package){$s.cpuTemp=Num $package.Value;$s.cpuTempSource='LibreHardwareMonitor · '+[string]$package.Name}
   $gpuSensors=@($sensors|Where-Object{$_.Identifier -match '/gpu-(nvidia|amd|intel)/0/'});
   if($null -eq $s.gpuTemp){$temp=$gpuSensors|Where-Object{$_.SensorType -eq 'Temperature' -and $_.Name -match 'GPU Core'}|Select-Object -First 1;if($temp){$s.gpuTemp=Num $temp.Value}}
   if($null -eq $s.gpu){$load=$gpuSensors|Where-Object{$_.SensorType -eq 'Load' -and $_.Name -match 'GPU Core'}|Select-Object -First 1;if($load){$s.gpu=Num $load.Value}}

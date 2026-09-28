@@ -6,6 +6,10 @@ case "$backup" in /var/backups/remote-monitor-hardening/update-*) ;; *) echo 'In
 test -f "$backup/ready"
 systemctl stop remote-monitor-ecs
 cp -p "$backup/server.py" /opt/remote-monitor-ecs/server.py
+if [ -d "$backup/static" ]; then
+  rm -rf -- /opt/remote-monitor-ecs/static
+  cp -a "$backup/static" /opt/remote-monitor-ecs/static
+fi
 cp -p "$backup/nginx.conf" /etc/nginx/conf.d/remote-monitor-https.conf
 drop=/etc/systemd/system/remote-monitor-ecs.service.d/50-hardening.conf
 if [ -f "$backup/dropin.conf" ]; then cp -p "$backup/dropin.conf" "$drop"; else rm -f -- "$drop"; fi

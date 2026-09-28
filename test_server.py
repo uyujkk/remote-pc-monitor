@@ -1,5 +1,7 @@
 import json
 import secrets
+import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 import uuid
@@ -53,5 +55,30 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(self.post('/api/login',{'password':'x'*17000}).status_code,413)
         for _ in range(7):self.assertEqual(self.post('/api/login',dict(username='x',password='bad')).status_code,401)
         self.assertEqual(self.post('/api/login',dict(username='x',password='bad')).status_code,429)
+    def test_hardware_details_and_gpu_power_history(self):
+        self.login()
+        cfg=self.post('/api/device',dict(name='Windows')).json
+        headers={'X-Device-Id':cfg['deviceId'],'Authorization':'Bearer '+cfg['deviceToken']}
+        sample=dict(sampleId=str(uuid.uuid4()),cpu=18,gpuPowerW=106.2,
+                    cpuName='Example CPU',motherboardName='Example Board',
+                    cpuTempSource='LibreHardwareMonitor · CPU Package',
+                    memoryModules=[dict(name='DDR4 module',capacityGb=16,speedMhz=3200)],
+                    storageModels=[dict(name='NVMe drive',sizeGb=476)],disks=[])
+        self.assertEqual(self.client.post('/api/ingest',json=sample,headers=headers).status_code,200)
+        result=self.client.get('/api/status',base_url=self.origin).json
+        self.assertEqual(result['latest']['cpuName'],'Example CPU')
+        self.assertEqual(result['latest']['memoryModules'][0]['capacityGb'],16)
+        self.assertEqual(result['history'][-1]['gpuPowerW'],106.2)
+        bad={**sample,'sampleId':str(uuid.uuid4()),'memoryModules':[dict(name='RAM',capacityGb='16',speedMhz=3200)]}
+        self.assertEqual(self.client.post('/api/ingest',json=bad,headers=headers).status_code,400)
+    def test_existing_history_schema_is_upgraded(self):
+        with closing(sqlite3.connect(self.settings['database'])) as conn:
+            with conn:
+                conn.execute('DROP TABLE samples')
+                conn.execute('CREATE TABLE samples(sample_id TEXT PRIMARY KEY,device_id TEXT NOT NULL,t INTEGER NOT NULL,cpu REAL,memory REAL,gpu REAL,cpuTemp REAL,gpuTemp REAL,netUp REAL,netDown REAL)')
+        create_app(self.settings)
+        with closing(sqlite3.connect(self.settings['database'])) as conn:
+            columns={row[1] for row in conn.execute('PRAGMA table_info(samples)')}
+        self.assertIn('gpuPowerW',columns)
 
 if __name__=='__main__':unittest.main()

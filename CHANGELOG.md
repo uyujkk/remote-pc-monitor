@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.0
+
+- Display CPU, motherboard, GPU, RAM module and physical disk models in the dashboard without collecting serial numbers.
+- Store GPU power history and show it in a dedicated trend view. Improve chart scaling, empty states and min/max summaries.
+- Modernize the Windows collector window and tray icon; add a persistent Chinese/English language selector.
+- Include updated dashboard assets in the existing-deployment upgrade archive and restore them during rollback.
+- Clarify that CPU package temperature requires an optional hardware sensor provider such as LibreHardwareMonitor; the collector does not install a kernel driver.
+
 ## v1.0.0
 
 - First public source release of the standalone ECS receiver and Windows tray collector.

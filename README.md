@@ -4,12 +4,13 @@ Self-hosted hardware monitoring for a Windows PC, with a browser dashboard and a
 
 **[Download the latest release](https://github.com/uyujkk/remote-pc-monitor/releases/latest)** · [简体中文说明](README.zh-CN.md) · [Cloudflare domain options](docs/cloudflare.md) · [TLS setup](docs/tls.md) · [Development](docs/development.md) · [Security](SECURITY.md)
 
-The current dashboard and tray UI are **Chinese**. This README provides English installation and usage instructions, including translations of the important buttons.
+The dashboard is in Chinese. The Windows tray collector supports **Chinese and English**, selectable in its window.
 
 ## Features
 
-- CPU, memory, GPU, temperature (where supported), disk capacity/IO, network throughput and uptime.
-- One-hour, 24-hour and seven-day charts; 30-day sample retention.
+- CPU, memory, GPU, temperature (where supported), GPU power, disk capacity/IO, network throughput and uptime.
+- Detailed CPU, motherboard, GPU, RAM module and physical disk models without serial numbers.
+- One-hour, 24-hour and seven-day charts with adaptive axes, per-metric summaries and GPU power history; 30-day sample retention.
 - Hidden collector process, visible tray icon, start/stop controls and optional startup after Windows sign-in.
 - HTTPS receiver, hashed account passwords and device tokens, revocable browser sessions, request validation and rate limits.
 - Optional daily SQLite backups with integrity checks, archive hash verification and 14-day retention.
@@ -87,7 +88,7 @@ The installer uses local, hash-locked wheels; creates the `remotemon` service ac
 1. Sign into the dashboard and click **接入电脑** (Connect PC).
 2. Download the collector ZIP and generate/download `config.json`. Generating a new configuration rotates the device token; old collectors using the previous token will stop authenticating.
 3. Extract the collector into a permanent directory, such as `D:\RemotePcMonitor`. Stop any previous collector first.
-4. Double-click **启动监控.vbs**. Click **导入接入配置** (Import configuration) and select the downloaded `config.json` from your own server.
+4. Double-click **启动监控.vbs**. Select **English** in the upper-right language selector if preferred. Click **导入接入配置** (Import configuration) and select the downloaded `config.json` from your own server.
 5. Wait for **上报成功** (Upload succeeded), then click **最小化到托盘** (Minimize to tray). Closing the window also hides it in the tray.
 6. Optionally enable **登录 Windows 后自动启动并收到托盘** to start after this user signs into Windows. Test it at your next convenient reboot/sign-in.
 
@@ -142,7 +143,7 @@ curl --fail https://monitor.example.com/healthz
 ```
 
 - `/healthz` should return `{"ok":true}`; an unauthenticated `/api/status` should return HTTP 401.
-- **Missing sensors:** the dashboard shows a dash. NVIDIA metrics use `nvidia-smi`; optional LibreHardwareMonitor WMI provides additional readings. No sensor driver is installed automatically.
+- **Missing sensors:** the dashboard shows a dash. NVIDIA metrics, including GPU power, use `nvidia-smi`; optional LibreHardwareMonitor WMI provides additional readings. Windows does not provide a dependable universal CPU core/package temperature reading through its standard WMI classes. No sensor driver is installed automatically.
 - **HTTP 401 from the collector:** check whether a new configuration rotated its key. Reimport the current configuration without sharing it.
 - **HTTP 429:** stop duplicate collectors or repeated login attempts and wait. A shared public IP also shares nginx rate limits.
 - **Timeout:** check address, network reachability, nginx, the cloud security group and the active firewalld zone. Test HTTPS from the actual Windows PC.

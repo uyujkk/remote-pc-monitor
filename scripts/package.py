@@ -23,6 +23,7 @@ archive('remote-monitor-ecs.tar.gz','remote-monitor-ecs',common+deployment+stati
 hard=root/'maintenance/hardening'
 entries=[(hard/n,n) for n in ('upgrade.sh','rollback.sh','reset_password.py','test_hardening.py','requirements.lock')]
 entries += [(root/n,n) for n in ('server.py','test_server.py')]
+entries += static
 entries += [(root/'deployment'/n,n) for n in ('render_config.py','nginx-https.conf.in')]
 archive('remote-monitor-hardening-v2.tar.gz','remote-monitor-hardening-v2',entries+wheels)
 archive('remote-monitor-backup-v1.tar.gz','remote-monitor-backup-v1',[(root/'maintenance/backup'/n,n) for n in ('backup.py','install.sh')])

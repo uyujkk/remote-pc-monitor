@@ -20,11 +20,14 @@ LIMITS = dict(cpu=100, memory=100, gpu=100, cpuTemp=200, gpuTemp=200,
               netUp=100000, netDown=100000, memoryUsedGb=100000, memoryTotalGb=100000,
               gpuMemoryUsedGb=100000, gpuMemoryTotalGb=100000, gpuPowerW=10000,
               cpuMhz=20000, uptimeSeconds=1e10, diskRead=1e6, diskWrite=1e6)
-CHART = ['cpu', 'memory', 'gpu', 'cpuTemp', 'gpuTemp', 'netUp', 'netDown']
+CHART = ['cpu', 'memory', 'gpu', 'cpuTemp', 'gpuTemp', 'netUp', 'netDown', 'gpuPowerW']
+HARDWARE_NAMES = ('cpuName', 'motherboardName', 'cpuTempSource')
+HARDWARE_LISTS = {'memoryModules': (16, 'capacityGb', 'speedMhz'),
+                  'storageModels': (16, 'sizeGb')}
 
 
 def validate_sample(data):
-    if not isinstance(data, dict) or set(data) - set(LIMITS) - {'sampleId', 'gpuName', 'disks'}:
+    if not isinstance(data, dict) or set(data) - set(LIMITS) - {'sampleId', 'gpuName', 'disks'} - set(HARDWARE_NAMES) - set(HARDWARE_LISTS):
         raise ValueError('Invalid fields')
     sid = str(uuid.UUID(data['sampleId']))
     clean = {}
@@ -37,6 +40,25 @@ def validate_sample(data):
     if name is not None and (not isinstance(name, str) or len(name) > 160):
         raise ValueError('Invalid GPU name')
     clean['gpuName'] = name
+    for field in HARDWARE_NAMES:
+        value = data.get(field)
+        if value is not None and (not isinstance(value, str) or len(value) > 160):
+            raise ValueError('Invalid hardware name')
+        clean[field] = value
+    for field, (limit, *numbers) in HARDWARE_LISTS.items():
+        items = data.get(field, [])
+        if not isinstance(items, list) or len(items) > limit:
+            raise ValueError('Invalid hardware list')
+        for item in items:
+            if not isinstance(item, dict) or set(item) != {'name', *numbers}:
+                raise ValueError('Invalid hardware item')
+            if not isinstance(item['name'], str) or not 1 <= len(item['name']) <= 160:
+                raise ValueError('Invalid hardware item name')
+            for number in numbers:
+                value = item[number]
+                if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1e7):
+                    raise ValueError('Invalid hardware value')
+        clean[field] = items
     disks = data.get('disks', [])
     if not isinstance(disks, list) or len(disks) > 32:
         raise ValueError('Invalid disks')
@@ -82,6 +104,8 @@ def create_app(settings=None):
         CREATE TABLE IF NOT EXISTS login_attempts(ip TEXT PRIMARY KEY,started INTEGER NOT NULL,n INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS web_sessions(token_hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
         ''')
+        if 'gpuPowerW' not in {row['name'] for row in conn.execute('PRAGMA table_info(samples)')}:
+            conn.execute('ALTER TABLE samples ADD COLUMN gpuPowerW REAL')
 
     def error(message, status):
         return jsonify(error=message), status
@@ -190,7 +214,9 @@ def create_app(settings=None):
                 return jsonify(ok=True, duplicate=True)
             if row['last_received'] and now - row['last_received'] < 10000:
                 return error('Wait at least 10 seconds between samples', 429)
-            conn.execute('INSERT INTO samples VALUES(?,?,?,?,?,?,?,?,?,?)', (sid, did, now, *(metrics[k] for k in CHART)))
+            columns = ','.join(('sample_id', 'device_id', 't', *CHART))
+            placeholders = ','.join('?' for _ in range(3 + len(CHART)))
+            conn.execute(f'INSERT INTO samples ({columns}) VALUES ({placeholders})', (sid, did, now, *(metrics[k] for k in CHART)))
             metrics['t'] = now
             conn.execute('UPDATE device SET last_received=?,latest=? WHERE id=?', (now, json.dumps(metrics), did))
             conn.execute('DELETE FROM samples WHERE t<?', (now - 30 * 86400000,))
