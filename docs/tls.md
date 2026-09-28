@@ -2,6 +2,8 @@
 
 Use your own DNS hostname or public IPv4 address throughout. Never use another deployment's address. The application installer expects an existing trusted certificate; it does not purchase a domain or accept certificate-authority terms for you.
 
+If Cloudflare manages your domain, read the [Cloudflare guide](cloudflare.md) ([简体中文](cloudflare.zh-CN.md)) first. The DNS-only route keeps HTTP-01 validation direct; proxy and Tunnel routes need their own reachability checks.
+
 The instructions below target Alibaba Cloud Linux 3 with Python 3.11 and nginx. A domain is optional. IP certificates need compatible Certbot support and short-lived renewal. See [Let's Encrypt's official IP certificate guide](https://letsencrypt.org/2026/03/11/shorter-certs-certbot) and [Certbot's instructions](https://certbot.eff.org/instructions?os=pip&ws=other).
 
 ## 1. HTTP challenge endpoint

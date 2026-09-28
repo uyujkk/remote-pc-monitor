@@ -2,7 +2,7 @@
 
 Self-hosted hardware monitoring for a Windows PC, with a browser dashboard and a small Windows tray collector. The receiver runs on your own Linux server. View it from a phone or another computer without installing a viewer.
 
-**[Download the latest release](https://github.com/uyujkk/remote-pc-monitor/releases/latest)** · [TLS setup](docs/tls.md) · [Development](docs/development.md) · [Security](SECURITY.md)
+**[Download the latest release](https://github.com/uyujkk/remote-pc-monitor/releases/latest)** · [简体中文说明](README.zh-CN.md) · [Cloudflare domain options](docs/cloudflare.md) · [TLS setup](docs/tls.md) · [Development](docs/development.md) · [Security](SECURITY.md)
 
 The current dashboard and tray UI are **Chinese**. This README provides English installation and usage instructions, including translations of the important buttons.
 
@@ -39,6 +39,7 @@ These are reusable public packages rebuilt from the running project's code. They
 - Linux x86-64 with systemd, Python 3.11 and nginx. The original deployment was validated on Alibaba Cloud Linux 3; other distributions require independent validation.
 - A public IPv4 address or DNS hostname reachable from both the monitored PC and the viewing device.
 - A trusted HTTPS certificate for that IP/hostname. You can use a domain or a supported IP certificate; see [TLS setup](docs/tls.md).
+- If using Cloudflare for DNS or proxying, follow the [Cloudflare guide](docs/cloudflare.md) before changing an existing server address.
 - Inbound TCP **443** for the dashboard and upload API; **80** for HTTP-01 certificate validation/renewal. Keep **18081 private**. Preserve existing SSH access.
 - Windows 10/11, Windows PowerShell 5.1 and .NET/WinForms. Optional sensor support is described below.
 
