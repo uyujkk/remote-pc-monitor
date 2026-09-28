@@ -118,13 +118,22 @@ journalctl -u remote-monitor-backup.service -n 30 --no-pager
 
 ## 更新旧部署与日常检查
 
-旧版 `/opt/remote-monitor-ecs` 部署可使用 `remote-monitor-hardening-v2.tar.gz`；它会保留原账号、令牌和历史，运行测试后切换，并提供回滚命令。先备份并阅读输出；全新安装无需运行它。
+旧版 `/opt/remote-monitor-ecs` 部署可使用 `remote-monitor-hardening-v2.tar.gz`；它会保留原账号、令牌和历史，运行测试后切换，并提供回滚命令。以下以 **v1.1.0** 为例，在 ECS 的 root 终端执行。全新安装无需运行升级脚本；更新已有部署也不要重跑全新安装脚本。
 
 ```bash
+mkdir -p /root/update-v1.1.0
+cd /root/update-v1.1.0
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.1.0/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.1.0/SHA256SUMS.txt
+sha256sum --check --ignore-missing SHA256SUMS.txt
 tar -xzf remote-monitor-hardening-v2.tar.gz
 cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
+
+如果服务器无法访问 GitHub，可在本机从[同一版本的 Release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.1.0)下载这两个文件，用 ECS Workbench 文件管理上传到 `/root/update-v1.1.0`，然后从 `sha256sum` 开始执行。校验应显示压缩包 `OK`；升级成功应显示 `HARDENING_OK` 和 `{"ok":true}`。请保存输出中的 `Backup` 与 `Rollback` 路径；`Password reset` 只是备用命令，无需在正常升级时运行。升级脚本会短暂重启服务、更新网页和采集端下载文件，并在切换失败时尝试回滚。若证书路径与默认路径不同，运行前设置 `MONITOR_CERTIFICATE` 和 `MONITOR_PRIVATE_KEY`，详见[英文更新说明](README.md#update-an-original-deployment)。
+
+服务器更新后，Windows 上仍需退出旧托盘程序，将同一 Release 的 `windows-tray-collector.zip` 解压到原采集端目录并覆盖同名脚本。保留原有 `config.protected.xml`，无需重新生成接入配置。重新运行 `启动监控.vbs` 并确认上报成功；浏览器若仍显示旧页面，可按 Ctrl+F5 刷新。
 
 如需把**已有 IP 地址部署**迁移为 Cloudflare 管理的域名，请使用 [迁移步骤](docs/cloudflare.zh-CN.md#已有-ip-地址部署迁移到域名)，保留旧入口直到域名、证书及 Windows 上报全部验证成功。
 

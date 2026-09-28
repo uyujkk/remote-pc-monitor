@@ -123,15 +123,20 @@ Before restoring, stop the receiver, preserve the current data/configuration, re
 
 ## Update an original deployment
 
-The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running it.
+The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.1.0**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
 
 ```bash
+mkdir -p /root/update-v1.1.0
+cd /root/update-v1.1.0
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.1.0/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.1.0/SHA256SUMS.txt
+sha256sum --check --ignore-missing SHA256SUMS.txt
 tar -xzf remote-monitor-hardening-v2.tar.gz
 cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
 
-The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output. Sign in again afterward; the Windows collector does not need a new key.
+If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.1.0) on your PC and upload them to `/root/update-v1.1.0` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward. The Windows collector does not need a new key, but replace its packaged scripts using `windows-tray-collector.zip` from the same release after stopping the old tray process. Keep the existing `config.protected.xml`; do not generate a new connection configuration for this update.
 
 ## Operations and troubleshooting
 
