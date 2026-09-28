@@ -2,14 +2,15 @@
 
 Self-hosted hardware monitoring for a Windows PC, with a browser dashboard and a small Windows tray collector. The receiver runs on your own Linux server. View it from a phone or another computer without installing a viewer.
 
-**[Download the latest release](https://github.com/uyujkk/remote-pc-monitor/releases/latest)** · [简体中文说明](README.zh-CN.md) · [Cloudflare domain options](docs/cloudflare.md) · [TLS setup](docs/tls.md) · [Development](docs/development.md) · [Security](SECURITY.md)
+**[Download the latest release](https://github.com/uyujkk/remote-pc-monitor/releases/latest)** · [简体中文说明](README.zh-CN.md) · [AUTO-MAS integration](docs/auto-mas.md) · [Cloudflare domain options](docs/cloudflare.md) · [TLS setup](docs/tls.md) · [Development](docs/development.md) · [Security](SECURITY.md)
 
-The dashboard is in Chinese. The Windows tray collector supports **Chinese and English**, selectable in its window.
+The dashboard and Windows tray collector support **Chinese and English**, selectable in the page header or collector window.
 
 ## Features
 
 - CPU, memory, GPU, temperature (where supported), GPU power, disk capacity/IO, network throughput and uptime.
 - Detailed CPU, motherboard, GPU, RAM module and physical disk models without serial numbers.
+- Optional read-only AUTO-MAS task snapshot from the monitored PC's localhost API; see [setup and limitations](docs/auto-mas.md).
 - One-hour, 24-hour and seven-day charts with adaptive axes, per-metric summaries and GPU power history; 30-day sample retention.
 - Hidden collector process, visible tray icon, start/stop controls and optional startup after Windows sign-in.
 - HTTPS receiver, hashed account passwords and device tokens, revocable browser sessions, request validation and rate limits.
@@ -123,20 +124,20 @@ Before restoring, stop the receiver, preserve the current data/configuration, re
 
 ## Update an original deployment
 
-The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.1.0**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
+The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.2.0**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
 
 ```bash
-mkdir -p /root/update-v1.1.0
-cd /root/update-v1.1.0
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.1.0/remote-monitor-hardening-v2.tar.gz
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.1.0/SHA256SUMS.txt
+mkdir -p /root/update-v1.2.0
+cd /root/update-v1.2.0
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.2.0/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.2.0/SHA256SUMS.txt
 sha256sum --check --ignore-missing SHA256SUMS.txt
 tar -xzf remote-monitor-hardening-v2.tar.gz
 cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
 
-If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.1.0) on your PC and upload them to `/root/update-v1.1.0` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward. The Windows collector does not need a new key, but replace its packaged scripts using `windows-tray-collector.zip` from the same release after stopping the old tray process. Keep the existing `config.protected.xml`; do not generate a new connection configuration for this update.
+If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.2.0) on your PC and upload them to `/root/update-v1.2.0` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward. The Windows collector does not need a new key, but replace its packaged scripts using `windows-tray-collector.zip` from the same release after stopping the old tray process. Keep the existing `config.protected.xml`; do not generate a new connection configuration for this update.
 
 ## Operations and troubleshooting
 

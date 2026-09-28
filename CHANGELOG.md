@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.0
+
+- Refresh the dashboard with a dedicated AUTO-MAS status panel and responsive task cards.
+- Add persistent Chinese/English language switching to the web login and dashboard.
+- Read AUTO-MAS health and, when available, live task snapshots from the Windows PC's loopback API without changing AUTO-MAS or exposing an inbound port.
+- For AUTO-MAS v5.4.0, read only the newest historical `DONE`/`ERROR` result because that release has no live runtime snapshot endpoint. Do not infer current task health from that result.
+- Bound and validate all uploaded AUTO-MAS summaries; raw task logs, user data and configuration are not uploaded.
+
 ## v1.1.0
 
 - Display CPU, motherboard, GPU, RAM module and physical disk models in the dashboard without collecting serial numbers.

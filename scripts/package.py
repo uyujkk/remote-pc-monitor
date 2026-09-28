@@ -4,7 +4,7 @@ import hashlib, shutil, tarfile, zipfile
 root=Path(__file__).resolve().parents[1]
 out=root/'dist';out.mkdir(exist_ok=True)
 collector=out/'windows-tray-collector.zip'
-names=['Collect.ps1','Diagnostics.ps1','Diagnose.ps1','Monitor.ps1','启动监控.vbs','诊断连接.cmd','README.txt']
+names=['Collect.ps1','AutoMas.ps1','Diagnostics.ps1','Diagnose.ps1','Monitor.ps1','启动监控.vbs','诊断连接.cmd','README.txt']
 with zipfile.ZipFile(collector,'w',zipfile.ZIP_DEFLATED) as z:
     for name in names:z.write(root/'collector'/name,name)
 shutil.copyfile(collector,root/'static/collector.zip')

@@ -26,6 +26,7 @@ Metrics: CPU load/frequency/model, motherboard model, RAM module models, physica
 NVIDIA metrics use the driver's nvidia-smi when available. Optional CPU temperature and other GPU sensors use LibreHardwareMonitor WMI if already installed.
 No drivers or sensor tools are installed automatically. Windows standard WMI classes do not provide a reliable direct CPU package/core temperature; LibreHardwareMonitor WMI is optional. Missing readings remain null (shown as a dash).
 Capacity is GiB although the UI abbreviates it as GB; throughput MB/s is decimal. Virtual network adapters may be counted twice.
-The collector does not capture the screen, send game input, run remote commands or inspect automation task logs.
+Optional AUTO-MAS status: the collector reads GET /api/core/health and, when available, GET /api/dispatch/runtime-snapshot on 127.0.0.1:36163. AUTO-MAS v5.4.0 has no snapshot endpoint, so the collector reads /api/history/search at most every five minutes for the latest result only. If AUTO-MAS uses another port, create auto-mas-port.txt beside Collect.ps1 with only the local port number. No public AUTO-MAS port is needed. Only a bounded status summary is uploaded; raw logs, users and configuration are not. A responding API or previous DONE result does not prove current task progress.
+The collector does not capture the screen, send game input or run remote commands.
 Online means a sample arrived recently; it does not prove an automation task is healthy.
 There is no offline spool or independent crash watchdog.

@@ -1,6 +1,7 @@
 ﻿param([switch]$Once,[switch]$NoUpload,[string]$ConfigPath=(Join-Path $PSScriptRoot 'config.json'))
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Diagnostics.ps1')
+. (Join-Path $PSScriptRoot 'AutoMas.ps1')
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
 $logPath=Join-Path $PSScriptRoot 'collector.log'
 function Log([string]$Message){
@@ -82,6 +83,7 @@ try{
   $started=Get-Date
   try{
    $sample=Read-Sample
+   $sample['autoMas']=Read-AutoMas
    if($NoUpload){$sample|ConvertTo-Json -Depth 5}
    else{
     $headers=@{Authorization=('Bearer '+$config.deviceToken);'X-Device-Id'=$config.deviceId}

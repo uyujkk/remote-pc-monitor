@@ -8,7 +8,7 @@ import secrets
 import sqlite3
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -27,7 +27,7 @@ HARDWARE_LISTS = {'memoryModules': (16, 'capacityGb', 'speedMhz'),
 
 
 def validate_sample(data):
-    if not isinstance(data, dict) or set(data) - set(LIMITS) - {'sampleId', 'gpuName', 'disks'} - set(HARDWARE_NAMES) - set(HARDWARE_LISTS):
+    if not isinstance(data, dict) or set(data) - set(LIMITS) - {'sampleId', 'gpuName', 'disks', 'autoMas'} - set(HARDWARE_NAMES) - set(HARDWARE_LISTS):
         raise ValueError('Invalid fields')
     sid = str(uuid.UUID(data['sampleId']))
     clean = {}
@@ -71,6 +71,46 @@ def validate_sample(data):
         if any(type(v) not in (int, float) or not math.isfinite(v) for v in (used, total)) or not 0 <= used <= total <= 1e8 or total == 0:
             raise ValueError('Invalid capacity')
     clean['disks'] = disks
+    auto_mas = data.get('autoMas')
+    if auto_mas is not None:
+        if not isinstance(auto_mas, dict) or set(auto_mas) != {'state', 'version', 'activeTasks', 'scheduledCount', 'tasks', 'lastResultAt', 'lastResult'}:
+            raise ValueError('Invalid AUTO-MAS status')
+        if auto_mas['state'] not in ('ready', 'limited', 'starting', 'unavailable', 'unsupported'):
+            raise ValueError('Invalid AUTO-MAS state')
+        version = auto_mas['version']
+        if version is not None and (not isinstance(version, str) or len(version) > 40):
+            raise ValueError('Invalid AUTO-MAS version')
+        for number in ('activeTasks', 'scheduledCount'):
+            if type(auto_mas[number]) is not int or not 0 <= auto_mas[number] <= 10000:
+                raise ValueError('Invalid AUTO-MAS count')
+        result_at, result = auto_mas['lastResultAt'], auto_mas['lastResult']
+        if result_at is not None:
+            if not isinstance(result_at, str) or len(result_at) != 19:
+                raise ValueError('Invalid AUTO-MAS result date')
+            try:
+                if datetime.strptime(result_at, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S') != result_at:
+                    raise ValueError('Invalid AUTO-MAS result date')
+            except ValueError as exc:
+                raise ValueError('Invalid AUTO-MAS result date') from exc
+        if result not in (None, 'DONE', 'ERROR') or (result_at is None) != (result is None):
+            raise ValueError('Invalid AUTO-MAS result')
+        tasks = auto_mas['tasks']
+        if not isinstance(tasks, list) or len(tasks) > 8:
+            raise ValueError('Invalid AUTO-MAS tasks')
+        for task in tasks:
+            if not isinstance(task, dict) or set(task) != {'mode', 'stopping', 'scripts'}:
+                raise ValueError('Invalid AUTO-MAS task')
+            if task['mode'] not in ('AutoProxy', 'ScriptConfig', 'Update') or type(task['stopping']) is not bool:
+                raise ValueError('Invalid AUTO-MAS task state')
+            scripts = task['scripts']
+            if not isinstance(scripts, list) or len(scripts) > 6:
+                raise ValueError('Invalid AUTO-MAS scripts')
+            for script in scripts:
+                if not isinstance(script, dict) or set(script) != {'name', 'status'}:
+                    raise ValueError('Invalid AUTO-MAS script')
+                if not all(isinstance(script[k], str) and len(script[k]) <= (80 if k == 'name' else 40) for k in ('name', 'status')):
+                    raise ValueError('Invalid AUTO-MAS script value')
+    clean['autoMas'] = auto_mas
     return sid, clean
 
 

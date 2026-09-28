@@ -7,7 +7,7 @@ import unittest
 import uuid
 from pathlib import Path
 from werkzeug.security import generate_password_hash
-from server import create_app
+from server import create_app, validate_sample
 
 class MonitorTests(unittest.TestCase):
     def setUp(self):
@@ -80,5 +80,20 @@ class MonitorTests(unittest.TestCase):
         with closing(sqlite3.connect(self.settings['database'])) as conn:
             columns={row[1] for row in conn.execute('PRAGMA table_info(samples)')}
         self.assertIn('gpuPowerW',columns)
+    def test_auto_mas_summary_accepts_only_bounded_status(self):
+        sample={'sampleId':str(uuid.uuid4()),'autoMas':{
+            'state':'ready','version':'5.4.0','activeTasks':1,'scheduledCount':2,
+            'lastResultAt':'2026-09-28 12:00:00','lastResult':'DONE',
+            'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[{'name':'Example task','status':'running'}]}]}}
+        _, clean=validate_sample(sample)
+        self.assertEqual(clean['autoMas']['tasks'][0]['scripts'][0]['name'],'Example task')
+        for bad in (
+            {**sample['autoMas'],'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[],'log':'private'}]},
+            {**sample['autoMas'],'activeTasks':True},
+            {**sample['autoMas'],'lastResult':'SUCCESS'},
+            {**sample['autoMas'],'lastResultAt':'2026/09/28'},
+            {**sample['autoMas'],'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[{'name':'x'*81,'status':'running'}]}]},
+        ):
+            with self.assertRaises(ValueError):validate_sample({**sample,'autoMas':bad})
 
 if __name__=='__main__':unittest.main()
