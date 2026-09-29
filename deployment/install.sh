@@ -18,7 +18,7 @@ getent passwd remotemon >/dev/null || useradd --system --home-dir /var/lib/remot
 install -d -m 755 /opt/remote-monitor-ecs
 install -d -o remotemon -g remotemon -m 700 /var/lib/remote-monitor-ecs
 install -d -o root -g remotemon -m 750 /etc/remote-monitor-ecs
-cp server.py requirements-linux.lock setup_account.py /opt/remote-monitor-ecs/
+cp server.py totp.py requirements-linux.lock setup_account.py /opt/remote-monitor-ecs/
 cp -R static /opt/remote-monitor-ecs/
 python3.11 -m venv /opt/remote-monitor-ecs/venv
 /opt/remote-monitor-ecs/venv/bin/python -m pip --isolated install --no-index --find-links wheels --require-hashes -r requirements-linux.lock

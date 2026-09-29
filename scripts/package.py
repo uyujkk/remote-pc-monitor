@@ -4,7 +4,7 @@ import hashlib, shutil, tarfile, zipfile
 root=Path(__file__).resolve().parents[1]
 out=root/'dist';out.mkdir(exist_ok=True)
 collector=out/'windows-tray-collector.zip'
-names=['Collect.ps1','AutoMas.ps1','Diagnostics.ps1','Diagnose.ps1','Monitor.ps1','启动监控.vbs','诊断连接.cmd','README.txt']
+names=['Collect.ps1','AutoMas.ps1','Health.ps1','ResultCrypto.ps1','Diagnostics.ps1','Diagnose.ps1','Monitor.ps1','启动监控.vbs','诊断连接.cmd','README.txt']
 with zipfile.ZipFile(collector,'w',zipfile.ZIP_DEFLATED) as z:
     for name in names:z.write(root/'collector'/name,name)
 shutil.copyfile(collector,root/'static/collector.zip')
@@ -17,12 +17,12 @@ def archive(name,prefix,entries):
 wheels=[(p,'wheels/'+p.name) for p in sorted((root/'vendor/wheels').glob('*.whl'))]
 if len(wheels)!=9:raise RuntimeError('Expected verified wheels; see docs/development.md')
 static=[(p,p.relative_to(root).as_posix()) for p in (root/'static').rglob('*') if p.is_file()]
-common=[(root/n,n) for n in ('server.py','setup_account.py','requirements-linux.lock','README.md')]
+common=[(root/n,n) for n in ('server.py','totp.py','setup_account.py','requirements-linux.lock','README.md')]
 deployment=[(root/'deployment'/n,n) for n in ('install.sh','render_config.py','nginx-https.conf.in')]
 archive('remote-monitor-ecs.tar.gz','remote-monitor-ecs',common+deployment+static+wheels)
 hard=root/'maintenance/hardening'
 entries=[(hard/n,n) for n in ('upgrade.sh','rollback.sh','reset_password.py','test_hardening.py','requirements.lock')]
-entries += [(root/n,n) for n in ('server.py','test_server.py')]
+entries += [(root/n,n) for n in ('server.py','totp.py','test_server.py')]
 entries += static
 entries += [(root/'deployment'/n,n) for n in ('render_config.py','nginx-https.conf.in')]
 archive('remote-monitor-hardening-v2.tar.gz','remote-monitor-hardening-v2',entries+wheels)

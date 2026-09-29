@@ -158,7 +158,7 @@ $import.Add_Click({
   $raw=[IO.File]::ReadAllText($dialog.FileName,[Text.Encoding]::UTF8)
   $c=$raw|ConvertFrom-Json
   $uri=[Uri]$c.endpoint
-  if(-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.AbsolutePath -ne '/api/ingest' -or $uri.Query -or $uri.Fragment -or $c.deviceToken -notmatch '^[a-f0-9]{64}$' -or $c.deviceId -notmatch '^[a-f0-9-]{36}$'){throw (T '配置不是有效接入配置。' 'The selected file is not a valid connection configuration.')}
+  if(-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.AbsolutePath -ne '/api/ingest' -or $uri.Query -or $uri.Fragment -or $c.deviceToken -notmatch '^[a-f0-9]{64}$' -or $c.deviceId -notmatch '^[a-f0-9-]{36}$' -or ($c.resultKey -and $c.resultKey -cnotmatch '^[a-f0-9]{128}$')){throw (T '配置不是有效接入配置。' 'The selected file is not a valid connection configuration.')}
   Stop-Collector
   $raw|ConvertTo-SecureString -AsPlainText -Force|Export-Clixml -LiteralPath (Join-Path $PSScriptRoot 'config.protected.xml')
   # A stale local plaintext config would otherwise override the imported secret.

@@ -6,6 +6,7 @@ case "$backup" in /var/backups/remote-monitor-hardening/update-*) ;; *) echo 'In
 test -f "$backup/ready"
 systemctl stop remote-monitor-ecs
 cp -p "$backup/server.py" /opt/remote-monitor-ecs/server.py
+if [ -f "$backup/totp.py" ]; then cp -p "$backup/totp.py" /opt/remote-monitor-ecs/totp.py; else rm -f -- /opt/remote-monitor-ecs/totp.py; fi
 if [ -d "$backup/static" ]; then
   rm -rf -- /opt/remote-monitor-ecs/static
   cp -a "$backup/static" /opt/remote-monitor-ecs/static

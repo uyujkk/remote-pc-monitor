@@ -21,6 +21,7 @@ python3.11 -m venv "$venv"
 backup=/var/backups/remote-monitor-hardening/update-$stamp
 install -d -m 700 /var/backups/remote-monitor-hardening "$backup"
 cp -p /opt/remote-monitor-ecs/server.py "$backup/server.py"
+if [ -f /opt/remote-monitor-ecs/totp.py ]; then cp -p /opt/remote-monitor-ecs/totp.py "$backup/totp.py"; fi
 if [ -d /opt/remote-monitor-ecs/static ]; then cp -a /opt/remote-monitor-ecs/static "$backup/static"; fi
 cp -p /etc/nginx/conf.d/remote-monitor-https.conf "$backup/nginx.conf"
 cp /etc/remote-monitor-ecs/config.json "$backup/config.json"
@@ -41,6 +42,7 @@ with sqlite3.connect(settings['database']) as source, sqlite3.connect(dest) as t
 os.chmod(dest,0o600)
 PY
 install -m 644 server.py /opt/remote-monitor-ecs/server.py
+install -m 644 totp.py /opt/remote-monitor-ecs/totp.py
 install -d -m 755 /opt/remote-monitor-ecs/static
 cp -a static/. /opt/remote-monitor-ecs/static/
 install -m 600 reset_password.py /opt/remote-monitor-ecs/reset_password.py

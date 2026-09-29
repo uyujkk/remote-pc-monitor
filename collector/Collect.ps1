@@ -2,6 +2,8 @@
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Diagnostics.ps1')
 . (Join-Path $PSScriptRoot 'AutoMas.ps1')
+. (Join-Path $PSScriptRoot 'Health.ps1')
+. (Join-Path $PSScriptRoot 'ResultCrypto.ps1')
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
 $logPath=Join-Path $PSScriptRoot 'collector.log'
 function Log([string]$Message){
@@ -61,7 +63,7 @@ if(-not $NoUpload){
   $config=$raw|ConvertFrom-Json
   $uri=[Uri]$config.endpoint
   if($uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.AbsolutePath -ne '/api/ingest' -or $uri.Query -or $uri.Fragment){throw 'Endpoint must be an HTTPS /api/ingest URL.'}
-  if($config.deviceToken -notmatch '^[a-f0-9]{64}$' -or $config.deviceId -notmatch '^[a-f0-9-]{36}$'){throw 'Invalid device configuration.'}
+  if($config.deviceToken -notmatch '^[a-f0-9]{64}$' -or $config.deviceId -notmatch '^[a-f0-9-]{36}$' -or ($config.resultKey -and $config.resultKey -cnotmatch '^[a-f0-9]{128}$')){throw 'Invalid device configuration.'}
   # DPAPI encryption is bound to this Windows user and computer.
   $raw|ConvertTo-SecureString -AsPlainText -Force|Export-Clixml -LiteralPath $protectedPath
   Remove-Item -LiteralPath $ConfigPath
@@ -83,7 +85,9 @@ try{
   $started=Get-Date
   try{
    $sample=Read-Sample
+   Set-HealthMetrics $sample (Read-HealthSignals)
    $sample['autoMas']=Read-AutoMas
+   if($config -and $config.resultKey){Protect-AutoMasResults $sample['autoMas'] $config.resultKey}
    if($NoUpload){$sample|ConvertTo-Json -Depth 5}
    else{
     $headers=@{Authorization=('Bearer '+$config.deviceToken);'X-Device-Id'=$config.deviceId}

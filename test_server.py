@@ -1,15 +1,24 @@
 import json
+import base64
 import secrets
 import sqlite3
 from contextlib import closing
 import tempfile
 import unittest
 import uuid
+import time
+from unittest.mock import patch
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 from server import create_app, validate_sample
+from totp import code_for_step, matching_step
 
 class MonitorTests(unittest.TestCase):
+    def test_totp_hotp_reference_and_replay_window(self):
+        secret=base64.b32encode(b'12345678901234567890').decode()
+        self.assertEqual(code_for_step(secret,0),'755224')
+        self.assertEqual(matching_step(secret,'755224',now=0),0)
+        self.assertIsNone(matching_step(secret,'755224',now=0,last_step=0))
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.origin='https://192.0.2.10'
@@ -80,6 +89,65 @@ class MonitorTests(unittest.TestCase):
         with closing(sqlite3.connect(self.settings['database'])) as conn:
             columns={row[1] for row in conn.execute('PRAGMA table_info(samples)')}
         self.assertIn('gpuPowerW',columns)
+        self.assertIn('healthScore',columns)
+        self.assertIn('stabilityIndex',columns)
+    def test_health_history_and_encrypted_result(self):
+        self.login()
+        cfg=self.post('/api/device',{'name':'Windows','sealedResults':True}).json
+        headers={'X-Device-Id':cfg['deviceId'],'Authorization':'Bearer '+cfg['deviceToken']}
+        result={'at':'2026-09-28 12:00:00','status':'DONE','encryptedMessage':'v1.'+'A'*80}
+        auto={'state':'ready','version':'5.4','activeTasks':0,'scheduledCount':0,'tasks':[],
+              'lastResultAt':result['at'],'lastResult':'DONE','recentResults':[result]}
+        sample={'sampleId':str(uuid.uuid4()),'healthScore':87.5,'healthCoverage':85,
+                'stabilityIndex':9.3,'wheaEvents24h':2,'memoryEvents24h':1,'wheaEventsCapped':False,
+                'autoMas':auto}
+        plain={**sample,'autoMas':{**auto,'recentResults':[{'at':result['at'],'status':'DONE','message':'private summary'}]}}
+        self.assertEqual(self.client.post('/api/ingest',json=plain,headers=headers).status_code,400)
+        self.assertEqual(self.client.post('/api/ingest',json=sample,headers=headers).status_code,200)
+        status=self.client.get('/api/status',base_url=self.origin).json
+        self.assertEqual(status['history'][-1]['healthScore'],87.5)
+        self.assertEqual(status['history'][-1]['stabilityIndex'],9.3)
+        self.assertEqual(status['latest']['autoMas']['recentResults'][0],result)
+        with closing(sqlite3.connect(self.settings['database'])) as conn:
+            stored=conn.execute('SELECT latest FROM device').fetchone()[0]
+        self.assertNotIn('private summary',stored)
+        for bad in ({'healthScore':101},{'healthCoverage':True},{'stabilityIndex':0},
+                    {'memoryEvents24h':3,'wheaEvents24h':2},{'wheaEventsCapped':1}):
+            with self.assertRaises(ValueError):validate_sample({'sampleId':str(uuid.uuid4()),**bad})
+    def test_totp_enrollment_login_replay_and_disable(self):
+        self.login()
+        self.assertEqual(self.post('/api/totp/setup',{'password':'bad'}).status_code,401)
+        setup=self.post('/api/totp/setup',{'password':'test-password-123'}).json
+        self.assertTrue(setup['uri'].startswith('otpauth://totp/'))
+        for _ in range(5):
+            self.assertEqual(self.post('/api/totp/enable',{'code':'invalid'}).status_code,401)
+        self.assertEqual(self.post('/api/totp/enable',{'code':'invalid'}).status_code,429)
+        setup=self.post('/api/totp/setup',{'password':'test-password-123'}).json
+        step=int(time.time()//30)
+        self.assertEqual(self.post('/api/totp/enable',{'code':code_for_step(setup['secret'],step)}).status_code,200)
+        self.assertTrue(self.client.get('/api/session',base_url=self.origin).json['totpEnabled'])
+        self.post('/api/logout',{})
+        self.assertEqual(self.post('/api/login',{'username':'tester','password':'test-password-123'}).status_code,401)
+        self.assertEqual(self.post('/api/login',{'username':'tester','password':'test-password-123','totp':code_for_step(setup['secret'],step)}).status_code,401)
+        with patch('totp.time.time',return_value=(step+1)*30):
+            self.assertEqual(self.post('/api/login',{'username':'tester','password':'test-password-123','totp':code_for_step(setup['secret'],step+1)}).status_code,200)
+        with patch('totp.time.time',return_value=(step+2)*30):
+            self.assertEqual(self.post('/api/totp/disable',{'password':'test-password-123','code':code_for_step(setup['secret'],step+2)}).status_code,200)
+        self.assertFalse(self.client.get('/api/session',base_url=self.origin).json['totpEnabled'])
+    def test_enabling_sealed_results_clears_legacy_latest(self):
+        self.login()
+        cfg=self.post('/api/device',{'name':'Windows'}).json
+        headers={'X-Device-Id':cfg['deviceId'],'Authorization':'Bearer '+cfg['deviceToken']}
+        plain={'sampleId':str(uuid.uuid4()),'autoMas':{'state':'limited','version':None,'activeTasks':0,'scheduledCount':0,'tasks':[],
+               'lastResultAt':'2026-09-28 12:00:00','lastResult':'DONE',
+               'recentResults':[{'at':'2026-09-28 12:00:00','status':'DONE','message':'private summary'}]}}
+        self.assertEqual(self.client.post('/api/ingest',json=plain,headers=headers).status_code,200)
+        self.assertIn('private summary',json.dumps(self.client.get('/api/status',base_url=self.origin).json))
+        self.post('/api/device',{'name':'Windows','sealedResults':True})
+        self.assertNotIn('private summary',json.dumps(self.client.get('/api/status',base_url=self.origin).json))
+        self.post('/api/device',{'name':'Windows'})
+        with closing(sqlite3.connect(self.settings['database'])) as conn:
+            self.assertEqual(conn.execute('SELECT sealed_results FROM device').fetchone()[0],1)
     def test_auto_mas_summary_accepts_only_bounded_status(self):
         sample={'sampleId':str(uuid.uuid4()),'autoMas':{
             'state':'ready','version':'5.4.0','activeTasks':1,'scheduledCount':2,

@@ -59,7 +59,7 @@ def run(root=Path('/'), output=Path('/var/backups/remote-monitor-daily'), now=No
                         raise RuntimeError('Unexpected symlink: ' + str(path))
                     if path.is_file():
                         files[path.relative_to(root).as_posix()] = path
-        for filename in ('server.py', 'requirements.txt', 'reset_password.py'):
+        for filename in ('server.py', 'totp.py', 'requirements.txt', 'reset_password.py'):
             path = root / 'opt/remote-monitor-ecs' / filename
             if path.is_file():
                 files[path.relative_to(root).as_posix()] = path

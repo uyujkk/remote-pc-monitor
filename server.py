@@ -4,6 +4,7 @@ import hmac
 import json
 import math
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -14,20 +15,24 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, session, send_from_directory, g
 from werkzeug.security import check_password_hash
+from totp import new_secret, matching_step, provisioning_uri
 
 ROOT = Path(__file__).resolve().parent
 LIMITS = dict(cpu=100, memory=100, gpu=100, cpuTemp=200, gpuTemp=200,
               netUp=100000, netDown=100000, memoryUsedGb=100000, memoryTotalGb=100000,
               gpuMemoryUsedGb=100000, gpuMemoryTotalGb=100000, gpuPowerW=10000,
-              cpuMhz=20000, uptimeSeconds=1e10, diskRead=1e6, diskWrite=1e6)
-CHART = ['cpu', 'memory', 'gpu', 'cpuTemp', 'gpuTemp', 'netUp', 'netDown', 'gpuPowerW']
+              cpuMhz=20000, uptimeSeconds=1e10, diskRead=1e6, diskWrite=1e6,
+              healthScore=100, healthCoverage=100, stabilityIndex=10,
+              wheaEvents24h=1000, memoryEvents24h=1000)
+CHART = ['cpu', 'memory', 'gpu', 'cpuTemp', 'gpuTemp', 'netUp', 'netDown', 'gpuPowerW',
+         'healthScore', 'stabilityIndex']
 HARDWARE_NAMES = ('cpuName', 'motherboardName', 'cpuTempSource')
 HARDWARE_LISTS = {'memoryModules': (16, 'capacityGb', 'speedMhz'),
                   'storageModels': (16, 'sizeGb')}
 
 
 def validate_sample(data):
-    if not isinstance(data, dict) or set(data) - set(LIMITS) - {'sampleId', 'gpuName', 'disks', 'autoMas'} - set(HARDWARE_NAMES) - set(HARDWARE_LISTS):
+    if not isinstance(data, dict) or set(data) - set(LIMITS) - {'sampleId', 'gpuName', 'disks', 'autoMas', 'wheaEventsCapped'} - set(HARDWARE_NAMES) - set(HARDWARE_LISTS):
         raise ValueError('Invalid fields')
     sid = str(uuid.UUID(data['sampleId']))
     clean = {}
@@ -36,6 +41,13 @@ def validate_sample(data):
         if value is not None and (type(value) not in (float, int) or not math.isfinite(value) or not 0 <= value <= maximum):
             raise ValueError('Invalid metric')
         clean[key] = value
+    if type(data.get('wheaEventsCapped', False)) is not bool:
+        raise ValueError('Invalid WHEA cap flag')
+    clean['wheaEventsCapped'] = data.get('wheaEventsCapped', False)
+    if clean['stabilityIndex'] is not None and clean['stabilityIndex'] < 1:
+        raise ValueError('Invalid stability index')
+    if clean['memoryEvents24h'] is not None and clean['wheaEvents24h'] is not None and clean['memoryEvents24h'] > clean['wheaEvents24h']:
+        raise ValueError('Invalid memory event count')
     name = data.get('gpuName')
     if name is not None and (not isinstance(name, str) or len(name) > 160):
         raise ValueError('Invalid GPU name')
@@ -118,8 +130,13 @@ def validate_sample(data):
         if any(type(counts[k]) is not int or not 0 <= counts[k] <= 100000 for k in counts):
             raise ValueError('Invalid AUTO-MAS result counts')
         for item in results:
-            if not isinstance(item, dict) or set(item) != {'at', 'status', 'message'} or item['status'] not in ('DONE', 'ERROR') or not isinstance(item['message'], str) or len(item['message']) > 160:
+            fields = set(item) if isinstance(item, dict) else set()
+            if fields not in ({'at', 'status', 'message'}, {'at', 'status', 'encryptedMessage'}) or item['status'] not in ('DONE', 'ERROR'):
                 raise ValueError('Invalid AUTO-MAS result item')
+            if 'message' in item and (not isinstance(item['message'], str) or len(item['message']) > 160):
+                raise ValueError('Invalid AUTO-MAS result item')
+            if 'encryptedMessage' in item and (not isinstance(item['encryptedMessage'], str) or len(item['encryptedMessage']) > 1400 or not re.fullmatch(r'v1\.[A-Za-z0-9+/]+={0,2}', item['encryptedMessage'])):
+                raise ValueError('Invalid encrypted result')
             try:
                 if datetime.strptime(item['at'], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S') != item['at']:
                     raise ValueError('Invalid AUTO-MAS result item date')
@@ -161,14 +178,21 @@ def create_app(settings=None):
     with db() as conn:
         conn.execute('PRAGMA journal_mode=WAL')
         conn.executescript('''
-        CREATE TABLE IF NOT EXISTS device(id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL,last_received INTEGER,latest TEXT);
+        CREATE TABLE IF NOT EXISTS device(id TEXT PRIMARY KEY,name TEXT NOT NULL,token_hash TEXT NOT NULL,last_received INTEGER,latest TEXT,sealed_results INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS samples(sample_id TEXT PRIMARY KEY,device_id TEXT NOT NULL REFERENCES device(id),t INTEGER NOT NULL,cpu REAL,memory REAL,gpu REAL,cpuTemp REAL,gpuTemp REAL,netUp REAL,netDown REAL);
         CREATE INDEX IF NOT EXISTS sample_time ON samples(t);
         CREATE TABLE IF NOT EXISTS login_attempts(ip TEXT PRIMARY KEY,started INTEGER NOT NULL,n INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS web_sessions(token_hash TEXT PRIMARY KEY,expires INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS totp(id INTEGER PRIMARY KEY CHECK(id=1),secret TEXT,pending_secret TEXT,pending_until INTEGER,last_step INTEGER NOT NULL DEFAULT -1,pending_attempts INTEGER NOT NULL DEFAULT 0);
         ''')
-        if 'gpuPowerW' not in {row['name'] for row in conn.execute('PRAGMA table_info(samples)')}:
-            conn.execute('ALTER TABLE samples ADD COLUMN gpuPowerW REAL')
+        columns = {row['name'] for row in conn.execute('PRAGMA table_info(samples)')}
+        for metric in ('gpuPowerW', 'healthScore', 'stabilityIndex'):
+            if metric not in columns:
+                conn.execute(f'ALTER TABLE samples ADD COLUMN {metric} REAL')
+        if 'sealed_results' not in {row['name'] for row in conn.execute('PRAGMA table_info(device)')}:
+            conn.execute('ALTER TABLE device ADD COLUMN sealed_results INTEGER NOT NULL DEFAULT 0')
+        if 'pending_attempts' not in {row['name'] for row in conn.execute('PRAGMA table_info(totp)')}:
+            conn.execute('ALTER TABLE totp ADD COLUMN pending_attempts INTEGER NOT NULL DEFAULT 0')
 
     def error(message, status):
         return jsonify(error=message), status
@@ -184,7 +208,7 @@ def create_app(settings=None):
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and request.path != '/api/ingest':
             if request.headers.get('Origin') != settings['origin']:
                 return error('Invalid origin', 403)
-        if request.path in ('/api/status', '/api/device', '/collector.zip') and not g.authenticated:
+        if request.path in ('/api/status', '/api/device', '/collector.zip', '/api/totp/setup', '/api/totp/enable', '/api/totp/disable') and not g.authenticated:
             return error('Sign in required', 401)
 
     @app.after_request
@@ -198,7 +222,10 @@ def create_app(settings=None):
 
     @app.get('/api/session')
     def identity():
-        return jsonify(authenticated=g.authenticated, username=settings['username'] if g.authenticated else None)
+        with db() as conn:
+            row = conn.execute('SELECT secret FROM totp WHERE id=1').fetchone()
+        return jsonify(authenticated=g.authenticated, username=settings['username'] if g.authenticated else None,
+                       totpEnabled=bool(row and row['secret']))
 
     @app.post('/api/login')
     def login():
@@ -223,6 +250,15 @@ def create_app(settings=None):
         if username != settings['username'] or not password_ok:
             return error('Invalid credentials', 401)
         with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            factor = conn.execute('SELECT secret,last_step FROM totp WHERE id=1').fetchone()
+            if factor and factor['secret']:
+                if not body.get('totp'):
+                    return error('Invalid credentials', 401)
+                step = matching_step(factor['secret'], body['totp'], last_step=factor['last_step'])
+                if step is None:
+                    return error('Invalid credentials', 401)
+                conn.execute('UPDATE totp SET last_step=? WHERE id=1', (step,))
             conn.execute('DELETE FROM login_attempts WHERE ip=?', (ip,))
             conn.execute('DELETE FROM web_sessions WHERE expires<=?', (now,))
             old_sid = session.get('sid')
@@ -233,6 +269,57 @@ def create_app(settings=None):
         session.clear()
         session['sid'] = sid
         session.permanent = True
+        return jsonify(ok=True)
+
+    @app.post('/api/totp/setup')
+    def totp_setup():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not isinstance(body.get('password'), str) or not check_password_hash(settings['password_hash'], body['password']):
+            return error('Invalid credentials', 401)
+        secret = new_secret()
+        with db() as conn:
+            row = conn.execute('SELECT secret FROM totp WHERE id=1').fetchone()
+            if row and row['secret']:
+                return error('Authenticator already enabled', 409)
+            conn.execute('INSERT INTO totp(id,pending_secret,pending_until,pending_attempts) VALUES(1,?,?,0) ON CONFLICT(id) DO UPDATE SET pending_secret=excluded.pending_secret,pending_until=excluded.pending_until,pending_attempts=0',
+                         (secret, int(time.time()) + 600))
+        return jsonify(secret=secret, uri=provisioning_uri(secret, settings['username']))
+
+    @app.post('/api/totp/enable')
+    def totp_enable():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return error('Invalid request', 400)
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM totp WHERE id=1').fetchone()
+            if not row or row['secret'] or not row['pending_secret'] or row['pending_until'] < time.time():
+                return error('Setup expired or already enabled', 409)
+            if row['pending_attempts'] >= 5:
+                return error('Too many attempts; restart setup', 429)
+            step = matching_step(row['pending_secret'], body.get('code'))
+            if step is None:
+                conn.execute('UPDATE totp SET pending_attempts=pending_attempts+1 WHERE id=1')
+                return error('Invalid code', 401)
+            conn.execute('UPDATE totp SET secret=pending_secret,pending_secret=NULL,pending_until=NULL,last_step=?,pending_attempts=0 WHERE id=1', (step,))
+            conn.execute('DELETE FROM web_sessions WHERE token_hash<>?', (hashlib.sha256(session['sid'].encode()).hexdigest(),))
+        return jsonify(ok=True)
+
+    @app.post('/api/totp/disable')
+    def totp_disable():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not isinstance(body.get('password'), str) or not check_password_hash(settings['password_hash'], body['password']):
+            return error('Invalid credentials', 401)
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT secret,last_step FROM totp WHERE id=1').fetchone()
+            if not row or not row['secret']:
+                return error('Authenticator not enabled', 409)
+            step = matching_step(row['secret'], body.get('code'), last_step=row['last_step'])
+            if step is None:
+                return error('Invalid code', 401)
+            conn.execute('DELETE FROM totp WHERE id=1')
+            conn.execute('DELETE FROM web_sessions WHERE token_hash<>?', (hashlib.sha256(session['sid'].encode()).hexdigest(),))
         return jsonify(ok=True)
 
     @app.post('/api/logout')
@@ -247,15 +334,17 @@ def create_app(settings=None):
     @app.post('/api/device')
     def device():
         data = request.get_json(silent=True)
-        if not isinstance(data, dict) or not isinstance(data.get('name'), str) or not 1 <= len(data['name']) <= 80:
+        if not isinstance(data, dict) or not isinstance(data.get('name'), str) or not 1 <= len(data['name']) <= 80 or type(data.get('sealedResults', False)) is not bool:
             return error('Invalid name', 400)
         token = secrets.token_hex(32)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            old = conn.execute('SELECT id FROM device LIMIT 1').fetchone()
+            old = conn.execute('SELECT id,sealed_results FROM device LIMIT 1').fetchone()
             did = old['id'] if old else str(uuid.uuid4())
-            conn.execute('INSERT INTO device(id,name,token_hash) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,token_hash=excluded.token_hash', (did, data['name'], token_hash))
+            conn.execute('INSERT INTO device(id,name,token_hash,sealed_results) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,token_hash=excluded.token_hash,sealed_results=MAX(device.sealed_results,excluded.sealed_results)', (did, data['name'], token_hash, int(data.get('sealedResults', False))))
+            if data.get('sealedResults') and old and not old['sealed_results']:
+                conn.execute('UPDATE device SET latest=NULL,last_received=NULL WHERE id=?', (did,))
         return jsonify(endpoint=settings['origin'] + '/api/ingest', deviceId=did, deviceToken=token, intervalSeconds=30)
 
     @app.post('/api/ingest')
@@ -273,6 +362,8 @@ def create_app(settings=None):
                 sid, metrics = validate_sample(request.get_json(silent=True))
             except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
                 return error('Invalid metrics', 400)
+            if row['sealed_results'] and metrics['autoMas'] and any('encryptedMessage' not in item for item in metrics['autoMas']['recentResults']):
+                return error('Encrypted result summaries required', 400)
             if conn.execute('SELECT 1 FROM samples WHERE sample_id=?', (sid,)).fetchone():
                 return jsonify(ok=True, duplicate=True)
             if row['last_received'] and now - row['last_received'] < 10000:

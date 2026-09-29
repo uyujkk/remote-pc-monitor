@@ -10,10 +10,12 @@
 
 - 查看 CPU、内存、显卡、温度（硬件支持时）、显卡功耗、磁盘、网络速度和运行时间，并显示 CPU、主板、显卡、内存模组及物理磁盘型号；不采集序列号。
 - 可选读取同一台 Windows 电脑上的 AUTO-MAS 只读任务快照，在网页显示后端状态、运行任务数和脚本状态；具体设置及限制见 [AUTO-MAS 接入说明](docs/auto-mas.zh-CN.md)。
-- 网页侧边栏分为总览、硬件与系统、运行趋势、脚本状态和执行结果五个模块；执行结果汇总最近 7 天的完成/报错数量与最多 12 条摘要。AUTO-MAS v5.4.0 无法提供实时任务进度。
+- 网页侧边栏分为总览、硬件与系统、运行趋势、健康与稳定、脚本状态、执行结果和安全设置；执行结果汇总最近 7 天的完成/报错数量与最多 12 条摘要。AUTO-MAS v5.4.0 无法提供实时任务进度。
+- “健康指数”是当前资源压力的 0–100 启发式评分，并显示可用指标覆盖率；“稳定指数”直接读取 Windows 可靠性监视器的 1–10 指数。两项均有历史图表。另显示近 24 小时 WHEA 硬件错误事件及可识别的内存相关事件数；普通非 ECC 内存不能提供完整纠错计数，0 条记录不代表内存无故障。
 - 查看最近 1 小时、24 小时、7 天的趋势；图表按指标调整纵轴并显示最新、最低、最高值，包含显卡功耗历史；服务端保留约 30 天采样。
 - Windows 采集端隐藏命令行，提供图形窗口与托盘图标；可选择登录 Windows 后自动启动。
-- HTTPS 传输、密码和设备令牌哈希存储、可撤销登录会话、基本限流。
+- HTTPS 传输、密码和设备令牌哈希存储、可撤销登录会话、基本限流；可选启用验证器 6 位动态码（TOTP），沿用现有 HTTPS 公网 IP 即可。通行密钥 WebAuthn 需要域名，本项目目前未实现。
+- 新版接入配置由浏览器本地生成摘要密钥，Windows 采集端在上传前加密 AUTO-MAS **结果摘要正文**，服务器只存密文；执行状态、时间、计数和任务名称仍可由服务器读取。安全边界和密钥恢复见[安全说明](SECURITY.md)。
 - 可选每日 SQLite 备份；不会自动把备份复制到另一台机器。
 
 ```text
@@ -89,7 +91,7 @@ Windows 托盘采集端 -- HTTPS --> nginx :443 --> Gunicorn 127.0.0.1:18081
 
 ## 接入 Windows 电脑
 
-1. 登录网页，点击 **接入电脑**，下载采集端和由**自己的服务器**生成的 `config.json`。每次重新生成接入配置都会轮换设备令牌，旧配置将不能继续上报。
+1. 登录网页，点击 **接入电脑**，下载采集端和接入用 `config.json`。设备令牌由自己的服务器生成，摘要加密密钥由当前浏览器生成并加入下载文件，不会发送给服务器。每次重新生成接入配置都会轮换设备令牌，旧配置将不能继续上报。
 2. 将 ZIP 解压到长期保留的目录，例如 `D:\RemotePcMonitor`。先停止旧采集端或旧计划任务，避免重复运行。
 3. 双击 **启动监控.vbs**。出现图形窗口后可在右上角切换 **English**；点击 **导入接入配置**，选择刚下载的 `config.json`。
 4. 等待显示 **上报成功**，再点击 **最小化到托盘**。直接关闭窗口也会隐藏到托盘。双击托盘图标可重新打开；右键选择 **退出并停止采集** 会真正退出。
@@ -97,9 +99,13 @@ Windows 托盘采集端 -- HTTPS --> nginx :443 --> Gunicorn 127.0.0.1:18081
 
 导入后的凭据由 Windows DPAPI 绑定当前用户和电脑保存，但最初下载的 `config.json` 仍是**明文凭据文件**，导入后请安全删除或妥善保管，绝不能提交到 GitHub。仅导入自己服务器生成的配置，因为导入会开始向其中的地址发送硬件数据。采集端约每 30 秒上报一次，网页约两分钟收不到数据会显示离线。
 
+接入后打开 **安全设置**，下载“脚本摘要恢复密钥”并离线保管；换浏览器时在该页导入密钥后才能解密摘要。所有密钥副本丢失后，已加密的旧摘要无法恢复。可在同一页输入当前密码、将显示的密钥手动添加到支持 TOTP 的验证器，并用 6 位动态码确认启用。若验证器丢失，服务器 root 用户运行密码重置脚本可同时清除动态码绑定。
+
 若系统禁用 VBScript，可参考 [采集端说明](collector/README.txt)建立隐藏 PowerShell 快捷方式。脚本目前未进行代码签名。**查看日志** 可打开本地采集日志；**诊断连接.cmd** 会显示命令行并测试连接，不会上传正式硬件样本。
 
 CPU 温度仅在已有 LibreHardwareMonitor 并提供 WMI 传感器时显示。Windows 标准 WMI 温度类没有可靠的 CPU 核心或封装温度读数；采集端不会自动安装内核驱动，也不会把主板热区温度误标为 CPU 温度。旧版采样没有显卡功耗历史，升级后才开始积累。
+
+健康指数按 CPU 压力 15%、内存压力 25%、最满磁盘 20%、CPU 温度 15%、GPU 温度 10%、WHEA 事件数 15% 计算。缺失指标不会按 0 处理，而是在已获取指标内重新归一化；覆盖率低于 40% 时不显示评分。它只提示当前负载风险，并非磁盘或内存故障诊断。稳定指数来自 Windows [`Win32_ReliabilityStabilityMetrics`](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/racwmiprov/win32-reliabilitystabilitymetrics)；硬件事件来自 [Windows 系统事件日志的 WHEA 记录](https://learn.microsoft.com/en-us/windows-hardware/drivers/whea/whea-hardware-error-events)。仅能识别明确标为内存相关的部分事件，普通非 ECC 电脑没有通用的内存纠错计数器。
 
 ## 可选：每日备份
 
@@ -120,22 +126,22 @@ journalctl -u remote-monitor-backup.service -n 30 --no-pager
 
 ## 更新旧部署与日常检查
 
-旧版 `/opt/remote-monitor-ecs` 部署可使用 `remote-monitor-hardening-v2.tar.gz`；它会保留原账号、令牌和历史，运行测试后切换，并提供回滚命令。以下以 **v1.3.0** 为例，在 ECS 的 root 终端执行。全新安装无需运行升级脚本；更新已有部署也不要重跑全新安装脚本。
+旧版 `/opt/remote-monitor-ecs` 部署可使用 `remote-monitor-hardening-v2.tar.gz`；它会保留原账号、令牌和历史，运行测试后切换，并提供回滚命令。以下以 **v1.4.0** 为例，在 ECS 的 root 终端执行。全新安装无需运行升级脚本；更新已有部署也不要重跑全新安装脚本。
 
 ```bash
-mkdir -p /root/update-v1.3.0
-cd /root/update-v1.3.0
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.3.0/remote-monitor-hardening-v2.tar.gz
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.3.0/SHA256SUMS.txt
+mkdir -p /root/update-v1.4.0
+cd /root/update-v1.4.0
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/SHA256SUMS.txt
 sha256sum --check --ignore-missing SHA256SUMS.txt
 tar -xzf remote-monitor-hardening-v2.tar.gz
 cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
 
-如果服务器无法访问 GitHub，可在本机从[同一版本的 Release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.3.0)下载这两个文件，用 ECS Workbench 文件管理上传到 `/root/update-v1.3.0`，然后从 `sha256sum` 开始执行。校验应显示压缩包 `OK`；升级成功应显示 `HARDENING_OK` 和 `{"ok":true}`。请保存输出中的 `Backup` 与 `Rollback` 路径；`Password reset` 只是备用命令，无需在正常升级时运行。升级脚本会短暂重启服务、更新网页和采集端下载文件，并在切换失败时尝试回滚。若证书路径与默认路径不同，运行前设置 `MONITOR_CERTIFICATE` 和 `MONITOR_PRIVATE_KEY`，详见[英文更新说明](README.md#update-an-original-deployment)。
+如果服务器无法访问 GitHub，可在本机从[同一版本的 Release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.4.0)下载这两个文件，用 ECS Workbench 文件管理上传到 `/root/update-v1.4.0`，然后从 `sha256sum` 开始执行。校验应显示压缩包 `OK`；升级成功应显示 `HARDENING_OK` 和 `{"ok":true}`。请保存输出中的 `Backup` 与 `Rollback` 路径；`Password reset` 只是备用命令，无需在正常升级时运行。升级脚本会短暂重启服务、更新网页和采集端下载文件，并在切换失败时尝试回滚。若证书路径与默认路径不同，运行前设置 `MONITOR_CERTIFICATE` 和 `MONITOR_PRIVATE_KEY`，详见[英文更新说明](README.md#update-an-original-deployment)。
 
-服务器更新后，Windows 上仍需退出旧托盘程序，将同一 Release 的 `windows-tray-collector.zip` 解压到原采集端目录并覆盖同名脚本。保留原有 `config.protected.xml`，无需重新生成接入配置。重新运行 `启动监控.vbs` 并确认上报成功；浏览器若仍显示旧页面，可按 Ctrl+F5 刷新。
+服务器更新后，Windows 上退出旧托盘程序，将同一 Release 的 `windows-tray-collector.zip` 解压到原采集端目录并覆盖同名脚本，然后重新运行 `启动监控.vbs`。原有 `config.protected.xml` 可继续上报，但**没有结果摘要加密密钥**。要启用摘要加密，请在新版网页的 **安全设置** 中先导入已有恢复密钥（若有），再到 **接入电脑** 重新生成并下载 `config.json`，同时下载并离线保存恢复密钥，在采集端窗口重新导入配置。重新生成会轮换设备令牌，请尽快在被监控电脑完成导入。确认上报成功，并在有新执行结果时验证摘要可解密；旧备份中的明文摘要不会自动转换。浏览器若仍显示旧页面，可按 Ctrl+F5 刷新。
 
 如需把**已有 IP 地址部署**迁移为 Cloudflare 管理的域名，请使用 [迁移步骤](docs/cloudflare.zh-CN.md#已有-ip-地址部署迁移到域名)，保留旧入口直到域名、证书及 Windows 上报全部验证成功。
 

@@ -1,5 +1,5 @@
 """Run as root on ECS. Preserves device credentials and history."""
-import getpass, json, os, secrets, subprocess
+import getpass, json, os, secrets, sqlite3, subprocess
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 path = Path('/etc/remote-monitor-ecs/config.json')
@@ -21,5 +21,8 @@ with os.fdopen(fd, 'w') as stream:
 os.chown(tmp, stat.st_uid, stat.st_gid)
 os.chmod(tmp, 0o640)
 os.replace(tmp, path)
+with sqlite3.connect(data['database']) as conn:
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='totp'").fetchone():
+        conn.execute('DELETE FROM totp')
 subprocess.run(['systemctl', 'restart', 'remote-monitor-ecs'], check=True)
-print('Password changed. All previous browser cookies invalidated. Device token unchanged.')
+print('Password changed. Authenticator enrollment cleared. All previous browser cookies invalidated. Device token unchanged.')

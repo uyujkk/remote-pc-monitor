@@ -11,10 +11,12 @@ The dashboard and Windows tray collector support **Chinese and English**, select
 - CPU, memory, GPU, temperature (where supported), GPU power, disk capacity/IO, network throughput and uptime.
 - Detailed CPU, motherboard, GPU, RAM module and physical disk models without serial numbers.
 - Optional read-only AUTO-MAS task snapshot from the monitored PC's localhost API; see [setup and limitations](docs/auto-mas.md).
-- Focused sidebar modules for Overview, Hardware, Trends, Automation and Results. The Results page summarizes up to twelve recent AUTO-MAS executions with seven-day completed/error totals; v5.4.0 does not provide live task progress.
+- Focused sidebar modules for Overview, Hardware, Trends, Health & Stability, Automation, Results and Security. The Results page summarizes up to twelve recent AUTO-MAS executions with seven-day completed/error totals; v5.4.0 does not provide live task progress.
+- A resource-pressure health score (0–100, with sensor coverage) and the native Windows Reliability Monitor stability index (1–10), each with history charts. WHEA event counts include only Windows-recorded hardware errors; a recognizable memory subset is shown separately. A zero count is not a RAM health certificate.
 - One-hour, 24-hour and seven-day charts with adaptive axes, per-metric summaries and GPU power history; 30-day sample retention.
 - Hidden collector process, visible tray icon, start/stop controls and optional startup after Windows sign-in.
-- HTTPS receiver, hashed account passwords and device tokens, revocable browser sessions, request validation and rate limits.
+- HTTPS receiver, hashed account passwords and device tokens, revocable browser sessions, request validation and rate limits. Optional six-digit TOTP authenticator codes work with an HTTPS IP address; WebAuthn passkeys require a domain and are not provided here.
+- New connection files include a browser-generated encryption key. The updated collector encrypts AUTO-MAS result **message text** before upload; the server stores ciphertext, while status, timestamps, counts and task names remain visible to the server. See [Security](SECURITY.md) for limits and key recovery.
 - Optional daily SQLite backups with integrity checks, archive hash verification and 14-day retention.
 - No external CDN required to display the dashboard; no remote command execution or game input features.
 
@@ -88,7 +90,7 @@ The installer uses local, hash-locked wheels; creates the `remotemon` service ac
 ## Connect the Windows PC
 
 1. Sign into the dashboard and click **接入电脑** (Connect PC).
-2. Download the collector ZIP and generate/download `config.json`. Generating a new configuration rotates the device token; old collectors using the previous token will stop authenticating.
+2. Download the collector ZIP and generate/download `config.json`. Generating a new configuration rotates the device token; old collectors using the previous token will stop authenticating. It also includes a script-summary encryption key generated in your browser; the server never receives that key.
 3. Extract the collector into a permanent directory, such as `D:\RemotePcMonitor`. Stop any previous collector first.
 4. Double-click **启动监控.vbs**. Select **English** in the upper-right language selector if preferred. Click **导入接入配置** (Import configuration) and select the downloaded `config.json` from your own server.
 5. Wait for **上报成功** (Upload succeeded), then click **最小化到托盘** (Minimize to tray). Closing the window also hides it in the tray.
@@ -98,7 +100,11 @@ Double-click the tray icon to reopen. Choose **退出并停止采集** from its 
 
 The collector stores imported credentials using Windows DPAPI for the current user and machine. The original downloaded JSON remains plaintext; remove it or store it securely. Never commit it to GitHub. Import only a configuration from a server you control: importing starts uploads to that address.
 
+Open **Security** and download the summary recovery key to safe offline storage. Import that key in any other browser before viewing encrypted summaries. If all copies are lost, past encrypted messages cannot be recovered. For optional second-factor sign-in, open **Security**, enter your current password, add the displayed secret to a TOTP authenticator and confirm a six-digit code. Keep a recovery path to your server: the root-only password-reset script also clears authenticator enrollment.
+
 The collector normally reports every 30 seconds. The dashboard marks it offline after roughly two minutes without a sample. This is a hardware heartbeat, **not proof that a game or automation task completed successfully**.
+
+The health score weighs CPU pressure (15%), memory pressure (25%), fullest disk (20%), CPU temperature (15%), GPU temperature (10%) and Windows WHEA event count (15%). Available weights are normalized; below 40% coverage the score is unavailable. It is a workload warning, not a drive/RAM diagnostic. The separate stability index is read from Windows [`Win32_ReliabilityStabilityMetrics`](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/racwmiprov/win32-reliabilitystabilitymetrics) when available. WHEA counts come from the [Windows System event log](https://learn.microsoft.com/en-us/windows-hardware/drivers/whea/whea-hardware-error-events); only explicitly identified memory events appear in the memory subset. A non-ECC system has no universal memory-correction counter.
 
 If VBScript is disabled, see the alternative PowerShell shortcut in [collector/README.txt](collector/README.txt). The scripts are not code-signed.
 
@@ -125,20 +131,22 @@ Before restoring, stop the receiver, preserve the current data/configuration, re
 
 ## Update an original deployment
 
-The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.3.0**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
+The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.4.0**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
 
 ```bash
-mkdir -p /root/update-v1.3.0
-cd /root/update-v1.3.0
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.3.0/remote-monitor-hardening-v2.tar.gz
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.3.0/SHA256SUMS.txt
+mkdir -p /root/update-v1.4.0
+cd /root/update-v1.4.0
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/SHA256SUMS.txt
 sha256sum --check --ignore-missing SHA256SUMS.txt
 tar -xzf remote-monitor-hardening-v2.tar.gz
 cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
 
-If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.3.0) on your PC and upload them to `/root/update-v1.3.0` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward. The Windows collector does not need a new key, but replace its packaged scripts using `windows-tray-collector.zip` from the same release after stopping the old tray process. Keep the existing `config.protected.xml`; do not generate a new connection configuration for this update.
+If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.4.0) on your PC and upload them to `/root/update-v1.4.0` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward.
+
+On Windows, exit the old tray program, then extract `windows-tray-collector.zip` from the same release over the collector directory and restart. The existing `config.protected.xml` will continue to work, but it **does not contain a result-encryption key**. To enable encrypted summaries, open **Security** in the updated website, import an existing recovery key if you have one, then generate a new connection file in **Connect PC**, download the recovery key and import the new `config.json` in the collector UI. This rotates the device token, so replace the configuration on the monitored PC promptly. Confirm a fresh upload and a decryptable new result. Existing plaintext summaries in old backups are not retroactively encrypted.
 
 ## Operations and troubleshooting
 
