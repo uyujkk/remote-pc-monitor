@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.0
+
+- Split the dashboard into sidebar modules: Overview, Hardware, Trends, Automation and Results, with a compact mobile module navigation.
+- Show AUTO-MAS task scripts individually when a live snapshot is available and keep historical outcomes in the Results module.
+- Aggregate seven days of AUTO-MAS history into completed/error totals and up to twelve recent execution results with bounded, filtered excerpts and a last-read timestamp. The v5.4.0 limitation remains explicit: historical outcomes do not reveal current task progress.
+- Keep the previous successful history summary in the running collector when the local AUTO-MAS API temporarily becomes unavailable. Existing collectors remain accepted by the updated server.
+
 ## v1.2.0
 
 - Refresh the dashboard with a dedicated AUTO-MAS status panel and responsive task cards.

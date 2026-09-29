@@ -87,12 +87,20 @@ class MonitorTests(unittest.TestCase):
             'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[{'name':'Example task','status':'running'}]}]}}
         _, clean=validate_sample(sample)
         self.assertEqual(clean['autoMas']['tasks'][0]['scripts'][0]['name'],'Example task')
+        self.assertEqual(clean['autoMas']['recentResults'],[])
+        complete={**sample['autoMas'],'recentResults':[{'at':'2026-09-28 12:00:00','status':'DONE','message':'Completed'}],'resultCounts':{'done':4,'error':1},'historyUpdatedAt':'2026-09-28 12:05:00'}
+        _, clean=validate_sample({**sample,'autoMas':complete})
+        self.assertEqual(clean['autoMas']['resultCounts']['error'],1)
         for bad in (
             {**sample['autoMas'],'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[],'log':'private'}]},
             {**sample['autoMas'],'activeTasks':True},
             {**sample['autoMas'],'lastResult':'SUCCESS'},
             {**sample['autoMas'],'lastResultAt':'2026/09/28'},
             {**sample['autoMas'],'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[{'name':'x'*81,'status':'running'}]}]},
+            {**complete,'recentResults':[{'at':'2026-09-28 12:00:00','status':'DONE','message':'x'*161}]},
+            {**complete,'recentResults':[{'at':'2026-09-28 12:00:00','status':'SUCCESS','message':'Done'}]},
+            {**complete,'resultCounts':{'done':True,'error':1}},
+            {**complete,'historyUpdatedAt':'invalid'},
         ):
             with self.assertRaises(ValueError):validate_sample({**sample,'autoMas':bad})
 

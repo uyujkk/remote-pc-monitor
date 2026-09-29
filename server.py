@@ -73,7 +73,8 @@ def validate_sample(data):
     clean['disks'] = disks
     auto_mas = data.get('autoMas')
     if auto_mas is not None:
-        if not isinstance(auto_mas, dict) or set(auto_mas) != {'state', 'version', 'activeTasks', 'scheduledCount', 'tasks', 'lastResultAt', 'lastResult'}:
+        required = {'state', 'version', 'activeTasks', 'scheduledCount', 'tasks', 'lastResultAt', 'lastResult'}
+        if not isinstance(auto_mas, dict) or not required <= set(auto_mas) or set(auto_mas) - required - {'recentResults', 'resultCounts', 'historyUpdatedAt'}:
             raise ValueError('Invalid AUTO-MAS status')
         if auto_mas['state'] not in ('ready', 'limited', 'starting', 'unavailable', 'unsupported'):
             raise ValueError('Invalid AUTO-MAS state')
@@ -110,6 +111,28 @@ def validate_sample(data):
                     raise ValueError('Invalid AUTO-MAS script')
                 if not all(isinstance(script[k], str) and len(script[k]) <= (80 if k == 'name' else 40) for k in ('name', 'status')):
                     raise ValueError('Invalid AUTO-MAS script value')
+        results = auto_mas.get('recentResults', [])
+        counts = auto_mas.get('resultCounts', {'done': 0, 'error': 0})
+        if not isinstance(results, list) or len(results) > 12 or not isinstance(counts, dict) or set(counts) != {'done', 'error'}:
+            raise ValueError('Invalid AUTO-MAS results')
+        if any(type(counts[k]) is not int or not 0 <= counts[k] <= 100000 for k in counts):
+            raise ValueError('Invalid AUTO-MAS result counts')
+        for item in results:
+            if not isinstance(item, dict) or set(item) != {'at', 'status', 'message'} or item['status'] not in ('DONE', 'ERROR') or not isinstance(item['message'], str) or len(item['message']) > 160:
+                raise ValueError('Invalid AUTO-MAS result item')
+            try:
+                if datetime.strptime(item['at'], '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S') != item['at']:
+                    raise ValueError('Invalid AUTO-MAS result item date')
+            except (ValueError, TypeError, KeyError) as exc:
+                raise ValueError('Invalid AUTO-MAS result item date') from exc
+        history_updated_at = auto_mas.get('historyUpdatedAt')
+        if history_updated_at is not None:
+            try:
+                if datetime.strptime(history_updated_at, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S') != history_updated_at:
+                    raise ValueError('Invalid AUTO-MAS history update date')
+            except (ValueError, TypeError) as exc:
+                raise ValueError('Invalid AUTO-MAS history update date') from exc
+        auto_mas = {**auto_mas, 'recentResults': results, 'resultCounts': counts, 'historyUpdatedAt': history_updated_at}
     clean['autoMas'] = auto_mas
     return sid, clean
 

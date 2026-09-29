@@ -11,6 +11,7 @@ The dashboard and Windows tray collector support **Chinese and English**, select
 - CPU, memory, GPU, temperature (where supported), GPU power, disk capacity/IO, network throughput and uptime.
 - Detailed CPU, motherboard, GPU, RAM module and physical disk models without serial numbers.
 - Optional read-only AUTO-MAS task snapshot from the monitored PC's localhost API; see [setup and limitations](docs/auto-mas.md).
+- Focused sidebar modules for Overview, Hardware, Trends, Automation and Results. The Results page summarizes up to twelve recent AUTO-MAS executions with seven-day completed/error totals; v5.4.0 does not provide live task progress.
 - One-hour, 24-hour and seven-day charts with adaptive axes, per-metric summaries and GPU power history; 30-day sample retention.
 - Hidden collector process, visible tray icon, start/stop controls and optional startup after Windows sign-in.
 - HTTPS receiver, hashed account passwords and device tokens, revocable browser sessions, request validation and rate limits.
