@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Restore the Trends page layout with the live CPU, memory, GPU and download cards above a taller history chart; keep disk and system-detail panels in Hardware.
+- Split the GitHub documentation into short English/Chinese quick deployment guides and complete manuals, with a Chinese TLS/renewal guide and clearer paths for fresh installation versus existing-server updates.
+
 ## v1.3.0
 
 - Split the dashboard into sidebar modules: Overview, Hardware, Trends, Automation and Results, with a compact mobile module navigation.

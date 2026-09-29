@@ -19,8 +19,8 @@ Cloudflare 官方对 [DNS-only 与代理流量路径](https://developers.cloudfl
 1. 注册自己的域名并添加到 Cloudflare；在域名注册商处将 NS 改为**你账户中实际显示的**两条 Cloudflare nameserver，等待域名在 Cloudflare 中显示 Active。
 2. 打开 **DNS → Records**，新增 `A` 记录：名称填 `monitor`，内容填自己的 ECS 公网 IPv4，Proxy status 选 **DNS only**。DNS 记录不要填 `https://` 或端口。没有真正配置 IPv6 时不要添加 `AAAA`。
 3. 从**被监控 Windows 电脑**和准备用来查看的手机/电脑确认域名解析为 ECS IP、80/443 网络可达。只在 ECS 上测试本机回环并不能证明远端网络可达。
-4. 按 [HTTPS 证书配置](tls.md)为该域名签发**浏览器信任**的证书，做好续期。IP 证书不能用于验证新域名。若使用 HTTP-01，端口 80 及 `/.well-known/acme-challenge/` 必须保持可访问。
-5. **全新安装**可按 [中文 README](../README.zh-CN.md#全新安装服务端)操作，设置 `MONITOR_ORIGIN='https://monitor.example.com'`，并填写这张域名证书真实的文件路径。先运行 `certbot certificates` 核对路径。安装时不要输入这里的示例域名。
+4. 按 [HTTPS 证书配置](tls.zh-CN.md)为该域名签发**浏览器信任**的证书，做好续期。IP 证书不能用于验证新域名。若使用 HTTP-01，端口 80 及 `/.well-known/acme-challenge/` 必须保持可访问。
+5. **全新安装**可按 [快速部署手册](quick-start.zh-CN.md#1-安装服务端)操作，设置 `MONITOR_ORIGIN='https://monitor.example.com'`，并填写这张域名证书真实的文件路径。先运行 `/opt/remote-monitor-certbot/bin/certbot certificates` 核对路径。安装时不要输入这里的示例域名。
 6. 从两台设备打开 `https://monitor.example.com/`。在 Windows 上登录自己的网页，点 **接入电脑**，下载本服务端生成的 `config.json`，导入托盘程序，确认 **上报成功**。
 
 ## 可选：切换橙云代理

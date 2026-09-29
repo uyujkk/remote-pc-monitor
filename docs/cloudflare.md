@@ -31,7 +31,7 @@ Cloudflare's [proxy status documentation](https://developers.cloudflare.com/dns/
    bash install.sh
    ```
 
-   The `remote-monitor-ip` directory is just the Certbot certificate label used by the TLS guide; it can hold a domain certificate. Verify the actual paths with `certbot certificates` rather than assuming these defaults.
+   The `remote-monitor-ip` directory is just the Certbot certificate label used by the TLS guide; it can hold a domain certificate. Verify the actual paths with `/opt/remote-monitor-certbot/bin/certbot certificates` rather than assuming these defaults.
 6. Open `https://monitor.example.com/` from both devices. On the Windows PC, sign in, select **接入电脑** (Connect PC), download a new `config.json` from **your** dashboard, and import it in the tray collector. Verify **上报成功** (Upload succeeded). A local `curl --resolve` test is useful but does not prove the remote network works.
 
 ## Optional: enable Cloudflare proxy
@@ -66,4 +66,4 @@ systemctl status nginx remote-monitor-ecs --no-pager
 curl --fail https://monitor.example.com/healthz
 ```
 
-Run the final `curl` from the Windows PC too (PowerShell: `Invoke-RestMethod -Uri 'https://monitor.example.com/healthz'`). Expected response is `{"ok":true}`. A timeout calls for DNS, routing, security-group/firewall and Cloudflare-path checks. A certificate warning means fix the certificate or hostname; never disable certificate verification. A `403 Invalid origin` after migration points to the app's configured origin. A Cloudflare `52x` response points toward the proxy/tunnel-to-origin path. A `401` from device ingestion may indicate an outdated collector configuration. Use the repository [README](../README.md) for application-specific troubleshooting.
+Run the final `curl` from the Windows PC too (PowerShell: `Invoke-RestMethod -Uri 'https://monitor.example.com/healthz'`). Expected response is `{"ok":true}`. A timeout calls for DNS, routing, security-group/firewall and Cloudflare-path checks. A certificate warning means fix the certificate or hostname; never disable certificate verification. A `403 Invalid origin` after migration points to the app's configured origin. A Cloudflare `52x` response points toward the proxy/tunnel-to-origin path. A `401` from device ingestion may indicate an outdated collector configuration. Use the [complete manual](manual.md#operations-and-troubleshooting) for application-specific troubleshooting.

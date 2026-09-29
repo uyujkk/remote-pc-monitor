@@ -1,5 +1,7 @@
 # HTTPS and automatic renewal
 
+[简体中文](tls.zh-CN.md) · [Quick deployment](quick-start.md) · [Complete manual](manual.md)
+
 Use your own DNS hostname or public IPv4 address throughout. Never use another deployment's address. The application installer expects an existing trusted certificate; it does not purchase a domain or accept certificate-authority terms for you.
 
 If Cloudflare manages your domain, read the [Cloudflare guide](cloudflare.md) ([简体中文](cloudflare.zh-CN.md)) first. The DNS-only route keeps HTTP-01 validation direct; proxy and Tunnel routes need their own reachability checks.
