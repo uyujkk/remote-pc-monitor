@@ -156,11 +156,16 @@ class MonitorTests(unittest.TestCase):
         _, clean=validate_sample(sample)
         self.assertEqual(clean['autoMas']['tasks'][0]['scripts'][0]['name'],'Example task')
         self.assertEqual(clean['autoMas']['recentResults'],[])
+        observed={**sample['autoMas'],'tasks':[{**sample['autoMas']['tasks'][0],'statusUnchangedSeconds':120}]}
+        _, clean=validate_sample({**sample,'autoMas':observed})
+        self.assertEqual(clean['autoMas']['tasks'][0]['statusUnchangedSeconds'],120)
         complete={**sample['autoMas'],'recentResults':[{'at':'2026-09-28 12:00:00','status':'DONE','message':'Completed'}],'resultCounts':{'done':4,'error':1},'historyUpdatedAt':'2026-09-28 12:05:00'}
         _, clean=validate_sample({**sample,'autoMas':complete})
         self.assertEqual(clean['autoMas']['resultCounts']['error'],1)
         for bad in (
             {**sample['autoMas'],'tasks':[{'mode':'AutoProxy','stopping':False,'scripts':[],'log':'private'}]},
+            {**sample['autoMas'],'tasks':[{**sample['autoMas']['tasks'][0],'statusUnchangedSeconds':True}]},
+            {**sample['autoMas'],'tasks':[{**sample['autoMas']['tasks'][0],'statusUnchangedSeconds':-1}]},
             {**sample['autoMas'],'activeTasks':True},
             {**sample['autoMas'],'lastResult':'SUCCESS'},
             {**sample['autoMas'],'lastResultAt':'2026/09/28'},

@@ -111,10 +111,13 @@ def validate_sample(data):
         if not isinstance(tasks, list) or len(tasks) > 8:
             raise ValueError('Invalid AUTO-MAS tasks')
         for task in tasks:
-            if not isinstance(task, dict) or set(task) != {'mode', 'stopping', 'scripts'}:
+            if not isinstance(task, dict) or not {'mode', 'stopping', 'scripts'} <= set(task) or set(task) - {'mode', 'stopping', 'scripts', 'statusUnchangedSeconds'}:
                 raise ValueError('Invalid AUTO-MAS task')
             if task['mode'] not in ('AutoProxy', 'ScriptConfig', 'Update') or type(task['stopping']) is not bool:
                 raise ValueError('Invalid AUTO-MAS task state')
+            unchanged = task.get('statusUnchangedSeconds')
+            if unchanged is not None and (type(unchanged) is not int or not 0 <= unchanged <= 86400 * 365):
+                raise ValueError('Invalid AUTO-MAS observation age')
             scripts = task['scripts']
             if not isinstance(scripts, list) or len(scripts) > 6:
                 raise ValueError('Invalid AUTO-MAS scripts')

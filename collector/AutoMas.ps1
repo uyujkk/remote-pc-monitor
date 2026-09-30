@@ -26,6 +26,7 @@ function Read-LocalJson([string]$Path,[int]$Port,[string]$Body='') {
 }
 $script:autoMasHistoryFetched=[datetime]::MinValue
 $script:autoMasHistory=@{lastResultAt=$null;lastResult=$null;recentResults=@();resultCounts=@{done=0;error=0};historyUpdatedAt=$null}
+$script:autoMasTaskObservations=@{}
 function Clean-AutoMasResult([string]$Value) {
  if(-not $Value){return ''}
  $clean=$Value -replace '[\r\n\t]+',' ' -replace 'https?://\S+','[link]' -replace '\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b','[email]' -replace '(?i)[A-Z]:\\[^\s]+','[path]' -replace '(?i)(password|token|secret|apikey|api_key)\s*[:=]\s*\S+','$1=[redacted]'
@@ -74,21 +75,37 @@ function Read-AutoMas {
  $summary.historyUpdatedAt=$script:autoMasHistory.historyUpdatedAt
  try {
   $snapshot=Read-LocalJson '/api/dispatch/runtime-snapshot' $port
-  if($null -eq $snapshot.tasks -or $null -eq $snapshot.scheduledScripts){return $summary}
+  if($null -eq $snapshot.tasks -or $null -eq $snapshot.scheduledScripts){$script:autoMasTaskObservations=@{};return $summary}
   $summary.state='ready'
   $summary.activeTasks=@($snapshot.tasks).Count
   $summary.scheduledCount=@($snapshot.scheduledScripts).Count
+  $observedAt=Get-Date
+  $currentTaskIds=@{}
   $summary.tasks=@($snapshot.tasks|Select-Object -First 8|ForEach-Object {
    $task=$_
+   $taskId=[string]$task.taskId
+   $statusSignature=(@($task.task_info|ForEach-Object { @($_.name,$_.status) -join ':' }) -join '|')+'|'+[string]$task.stopping
+   $unchangedSeconds=$null
+   if($taskId -match '^[0-9a-fA-F-]{36}$'){
+    $currentTaskIds[$taskId]=$true
+    $previous=$script:autoMasTaskObservations[$taskId]
+    if($null -eq $previous -or $previous.signature -cne $statusSignature){
+     $previous=@{signature=$statusSignature;since=$observedAt}
+     $script:autoMasTaskObservations[$taskId]=$previous
+    }
+    $unchangedSeconds=[Math]::Max(0,[Math]::Min(86400*365,[int](($observedAt-$previous.since).TotalSeconds)))
+   }
    $scripts=@($task.task_info|Select-Object -First 6|ForEach-Object {
     $item=$_
     @{name=([string]$item.name).Substring(0,[Math]::Min(80,([string]$item.name).Length));status=([string]$item.status).Substring(0,[Math]::Min(40,([string]$item.status).Length))}
    })
    $mode=[string]$task.mode;if($mode -notin @('AutoProxy','ScriptConfig','Update')){$mode='AutoProxy'}
-   @{mode=$mode;stopping=($task.stopping -eq $true);scripts=$scripts}
+   @{mode=$mode;stopping=($task.stopping -eq $true);scripts=$scripts;statusUnchangedSeconds=$unchangedSeconds}
   })
+  foreach($taskId in @($script:autoMasTaskObservations.Keys)){if(-not $currentTaskIds.ContainsKey($taskId)){$script:autoMasTaskObservations.Remove($taskId)}}
  }catch [Net.WebException] {
+  $script:autoMasTaskObservations=@{}
   if($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404 -and -not $healthy){$summary.state='unsupported'}
- }catch{}
+ }catch{$script:autoMasTaskObservations=@{}}
  return $summary
 }
