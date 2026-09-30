@@ -16,6 +16,19 @@ Self-hosted monitoring for one Windows PC. A small tray collector sends hardware
 
 **Already running a monitor?** Use the **update** procedure in the [complete manual](docs/manual.md#update-an-original-deployment). The fresh-install script refuses an existing configuration. The server and Windows collector are separate; update the part that changed. Download an archive and its `SHA256SUMS.txt` from the **same Release** before installing.
 
+## Dashboard preview
+
+These screenshots show the built-in demo mode with simulated metrics and a placeholder account. They contain no real device data.
+
+![Remote PC Monitor overview showing simulated device metrics and script results](docs/images/dashboard-overview-en.png)
+
+<details>
+<summary>Show the Trends preview</summary>
+
+![Remote PC Monitor trends showing a simulated CPU history chart](docs/images/dashboard-trends-en.png)
+
+</details>
+
 ## What you get
 
 - CPU, memory, GPU, supported temperatures and GPU power, disk, network and uptime. Hardware models are shown without collecting serial numbers. Unavailable sensors display “—”.
