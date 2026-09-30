@@ -134,13 +134,13 @@ journalctl -u remote-monitor-backup.service -n 30 --no-pager
 
 ## 更新旧部署与日常检查
 
-旧版 `/opt/remote-monitor-ecs` 部署可使用 `remote-monitor-hardening-v2.tar.gz`；它会保留原账号、令牌和历史，运行测试后切换，并提供回滚命令。以下以 **v1.4.0** 为例，在 ECS 的 root 终端执行。全新安装无需运行升级脚本；更新已有部署也不要重跑全新安装脚本。
+旧版 `/opt/remote-monitor-ecs` 部署可使用 `remote-monitor-hardening-v2.tar.gz`；它会保留原账号、令牌和历史，运行测试后切换，并提供回滚命令。以下以 **v1.4.1** 为例，在 ECS 的 root 终端执行。全新安装无需运行升级脚本；更新已有部署也不要重跑全新安装脚本。
 
 ```bash
-mkdir -p /root/update-v1.4.0
-cd /root/update-v1.4.0
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/remote-monitor-hardening-v2.tar.gz
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/SHA256SUMS.txt
+mkdir -p /root/update-v1.4.1
+cd /root/update-v1.4.1
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.1/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.1/SHA256SUMS.txt
 sha256sum --check --ignore-missing SHA256SUMS.txt
 ```
 
@@ -152,7 +152,7 @@ cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
 
-如果服务器无法访问 GitHub，可在本机从[同一版本的 Release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.4.0)下载这两个文件，用 ECS Workbench 文件管理上传到 `/root/update-v1.4.0`，然后从 `sha256sum` 开始执行。校验应显示压缩包 `OK`；升级成功应显示 `HARDENING_OK` 和 `{"ok":true}`。请保存输出中的 `Backup` 与 `Rollback` 路径；`Password reset` 只是备用命令，无需在正常升级时运行。升级脚本会短暂重启服务、更新网页和采集端下载文件，并在切换失败时尝试回滚。若证书路径与默认证书目录不同，应在运行 `upgrade.sh` 前按实际路径设置 `MONITOR_CERTIFICATE` 和 `MONITOR_PRIVATE_KEY`，不要复制别人的证书路径：
+如果服务器无法访问 GitHub，可在本机从[同一版本的 Release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.4.1)下载这两个文件，用 ECS Workbench 文件管理上传到 `/root/update-v1.4.1`，然后从 `sha256sum` 开始执行。校验应显示压缩包 `OK`；升级成功应显示 `HARDENING_OK` 和 `{"ok":true}`。请保存输出中的 `Backup` 与 `Rollback` 路径；`Password reset` 只是备用命令，无需在正常升级时运行。升级脚本会短暂重启服务、更新网页和采集端下载文件，并在切换失败时尝试回滚。若证书路径与默认证书目录不同，应在运行 `upgrade.sh` 前按实际路径设置 `MONITOR_CERTIFICATE` 和 `MONITOR_PRIVATE_KEY`，不要复制别人的证书路径：
 
 ```bash
 export MONITOR_CERTIFICATE='/实际证书目录/fullchain.pem'

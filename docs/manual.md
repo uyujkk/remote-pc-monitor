@@ -139,13 +139,13 @@ Before restoring, stop the receiver, preserve the current data/configuration, re
 
 ## Update an original deployment
 
-The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.4.0**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
+The separate hardening archive preserves the original account, device token and history and requires the existing standard directory layout. It reads the HTTPS origin from the server's own configuration. The commands below use **v1.4.1**; run them as root on the ECS host. If certificate paths differ from the defaults above, export `MONITOR_CERTIFICATE` and `MONITOR_PRIVATE_KEY` before running `upgrade.sh`.
 
 ```bash
-mkdir -p /root/update-v1.4.0
-cd /root/update-v1.4.0
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/remote-monitor-hardening-v2.tar.gz
-curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.0/SHA256SUMS.txt
+mkdir -p /root/update-v1.4.1
+cd /root/update-v1.4.1
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.1/remote-monitor-hardening-v2.tar.gz
+curl -fL --retry 3 -O https://github.com/uyujkk/remote-pc-monitor/releases/download/v1.4.1/SHA256SUMS.txt
 sha256sum --check --ignore-missing SHA256SUMS.txt
 ```
 
@@ -157,7 +157,7 @@ cd remote-monitor-hardening-v2
 bash upgrade.sh
 ```
 
-If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.4.0) on your PC and upload them to `/root/update-v1.4.0` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward.
+If the ECS host cannot reach GitHub, download both files from the [same release](https://github.com/uyujkk/remote-pc-monitor/releases/tag/v1.4.1) on your PC and upload them to `/root/update-v1.4.1` with ECS Workbench; then start at the `sha256sum` line. The checksum should report `OK`. The updater installs offline dependencies and runs isolated tests before switching. It briefly restarts the receiver, updates the dashboard and collector download, creates a root-only rollback backup, and attempts rollback on failure. On success, it prints `HARDENING_OK`, a backup path, a password-reset command and a rollback command. Keep this output; the password-reset command is only for recovery. Sign in again afterward.
 
 On Windows, exit the old tray program, then extract `windows-tray-collector.zip` from the same release over the collector directory and restart. The existing `config.protected.xml` will continue to work, but it **does not contain a result-encryption key**. To enable encrypted summaries, open **Security** in the updated website, import an existing recovery key if you have one, then generate a new connection file in **Connect PC**, download the recovery key and import the new `config.json` in the collector UI. This rotates the device token, so replace the configuration on the monitored PC promptly. Confirm a fresh upload and a decryptable new result. Existing plaintext summaries in old backups are not retroactively encrypted.
 

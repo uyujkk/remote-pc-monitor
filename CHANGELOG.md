@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+## v1.4.1
+
 - Restore the Trends page layout with the live CPU, memory, GPU and download cards above a taller history chart; keep disk and system-detail panels in Hardware.
 - Split the GitHub documentation into short English/Chinese quick deployment guides and complete manuals, with a Chinese TLS/renewal guide and clearer paths for fresh installation versus existing-server updates.
+- Add bilingual dashboard preview images to the repository home pages.
+- Observe how long an AUTO-MAS v5.6 task's visible status remains unchanged, without uploading task IDs or raw logs. This is an observation, not a stall diagnosis; the timer resets after collector restart or snapshot failure.
 
 ## v1.3.0
 
